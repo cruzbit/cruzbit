@@ -737,7 +737,7 @@ func (p *Peer) getBlock(id BlockID, outChan chan<- Message) error {
 	}
 
 	// send out the raw bytes
-	body := []byte(`{"id":"`)
+	body := []byte(`{"block_id":"`)
 	body = append(body, []byte(id.String())...)
 	body = append(body, []byte(`","block":`)...)
 	body = append(body, blockJson...)
