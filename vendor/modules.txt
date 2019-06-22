@@ -1,0 +1,96 @@
+# github.com/buger/jsonparser v0.0.0-20181115193947-bf1c66bbce23
+github.com/buger/jsonparser
+# github.com/c-bata/go-prompt v0.2.3
+github.com/c-bata/go-prompt
+# github.com/dgryski/go-metro v0.0.0-20180109044635-280f6062b5bc
+github.com/dgryski/go-metro
+# github.com/glendc/go-external-ip v0.0.0-20170425150139-139229dcdddd
+github.com/glendc/go-external-ip
+# github.com/golang/snappy v0.0.0-20180518054509-2e65f85255db
+github.com/golang/snappy
+# github.com/gorilla/websocket v1.4.0
+github.com/gorilla/websocket
+# github.com/logrusorgru/aurora v0.0.0-20190428105938-cea283e61946
+github.com/logrusorgru/aurora
+# github.com/mattn/go-colorable v0.1.2
+github.com/mattn/go-colorable
+# github.com/mattn/go-isatty v0.0.8
+github.com/mattn/go-isatty
+# github.com/mattn/go-runewidth v0.0.4
+github.com/mattn/go-runewidth
+# github.com/mattn/go-tty v0.0.0-20190424173100-523744f04859
+github.com/mattn/go-tty
+# github.com/miekg/dns v1.1.14
+github.com/miekg/dns
+# github.com/pierrec/lz4 v2.0.5+incompatible
+github.com/pierrec/lz4
+github.com/pierrec/lz4/internal/xxh32
+# github.com/pkg/term v0.0.0-20190109203006-aa71e9d9e942
+github.com/pkg/term/termios
+# github.com/seiflotfy/cuckoofilter v0.0.0-20190302225222-764cb5258d9b
+github.com/seiflotfy/cuckoofilter
+# github.com/syndtr/goleveldb v1.0.0
+github.com/syndtr/goleveldb/leveldb
+github.com/syndtr/goleveldb/leveldb/opt
+github.com/syndtr/goleveldb/leveldb/util
+github.com/syndtr/goleveldb/leveldb/cache
+github.com/syndtr/goleveldb/leveldb/comparer
+github.com/syndtr/goleveldb/leveldb/errors
+github.com/syndtr/goleveldb/leveldb/filter
+github.com/syndtr/goleveldb/leveldb/iterator
+github.com/syndtr/goleveldb/leveldb/journal
+github.com/syndtr/goleveldb/leveldb/memdb
+github.com/syndtr/goleveldb/leveldb/storage
+github.com/syndtr/goleveldb/leveldb/table
+# github.com/thoj/go-ircevent v0.0.0-20190609082534-949efec00844
+github.com/thoj/go-ircevent
+# gitlab.com/NebulousLabs/fastrand v0.0.0-20181126182046-603482d69e40
+gitlab.com/NebulousLabs/fastrand
+# gitlab.com/NebulousLabs/go-upnp v0.0.0-20181011194642-3a71999ed0d3
+gitlab.com/NebulousLabs/go-upnp
+gitlab.com/NebulousLabs/go-upnp/goupnp
+gitlab.com/NebulousLabs/go-upnp/goupnp/dcps/internetgateway1
+gitlab.com/NebulousLabs/go-upnp/goupnp/httpu
+gitlab.com/NebulousLabs/go-upnp/goupnp/scpd
+gitlab.com/NebulousLabs/go-upnp/goupnp/soap
+gitlab.com/NebulousLabs/go-upnp/goupnp/ssdp
+# golang.org/x/crypto v0.0.0-20190621222207-cc06ce4a13d4
+golang.org/x/crypto/argon2
+golang.org/x/crypto/ed25519
+golang.org/x/crypto/nacl/secretbox
+golang.org/x/crypto/sha3
+golang.org/x/crypto/ssh/terminal
+golang.org/x/crypto/blake2b
+golang.org/x/crypto/ed25519/internal/edwards25519
+golang.org/x/crypto/internal/subtle
+golang.org/x/crypto/poly1305
+golang.org/x/crypto/salsa20/salsa
+# golang.org/x/net v0.0.0-20190404232315-eb5bcb51f2a3
+golang.org/x/net/ipv4
+golang.org/x/net/ipv6
+golang.org/x/net/bpf
+golang.org/x/net/internal/iana
+golang.org/x/net/internal/socket
+golang.org/x/net/html/charset
+golang.org/x/net/html
+golang.org/x/net/html/atom
+# golang.org/x/sys v0.0.0-20190412213103-97732733099d
+golang.org/x/sys/unix
+golang.org/x/sys/cpu
+golang.org/x/sys/windows
+# golang.org/x/text v0.3.0
+golang.org/x/text/encoding
+golang.org/x/text/encoding/charmap
+golang.org/x/text/encoding/htmlindex
+golang.org/x/text/transform
+golang.org/x/text/encoding/internal/identifier
+golang.org/x/text/encoding/internal
+golang.org/x/text/encoding/japanese
+golang.org/x/text/encoding/korean
+golang.org/x/text/encoding/simplifiedchinese
+golang.org/x/text/encoding/traditionalchinese
+golang.org/x/text/encoding/unicode
+golang.org/x/text/language
+golang.org/x/text/internal/utf8internal
+golang.org/x/text/runes
+golang.org/x/text/internal/tag
