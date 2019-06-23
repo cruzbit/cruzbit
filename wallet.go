@@ -329,6 +329,20 @@ func (w *Wallet) Send(from, to ed25519.PublicKey, amount, fee, matures, expires 
 	return ptr.TransactionID, nil
 }
 
+// GetTransaction retrieves information about a historic transaction.
+func (w *Wallet) GetTransaction(id TransactionID) (*Transaction, *BlockID, int64, error) {
+	w.outChan <- Message{Type: "get_transaction", Body: GetTransactionMessage{TransactionID: id}}
+	result := <-w.resultChan
+	if len(result.err) != 0 {
+		return nil, nil, 0, fmt.Errorf("%s", result.err)
+	}
+	t := new(TransactionMessage)
+	if err := json.Unmarshal(result.message, t); err != nil {
+		return nil, nil, 0, err
+	}
+	return t.Transaction, t.BlockID, t.Height, nil
+}
+
 // Used to hold the result of synchronous requests
 type walletResult struct {
 	err     string
@@ -397,11 +411,15 @@ func (w *Wallet) run() {
 			case "push_transaction_result":
 				w.resultChan <- walletResult{message: body}
 
+			case "transaction":
+				w.resultChan <- walletResult{message: body}
+
 			case "filter_result":
 				if len(body) != 0 {
 					fr := new(FilterResultMessage)
 					if err := json.Unmarshal(body, fr); err != nil {
 						log.Printf("Error: %s, from: %s\n", err, w.conn.RemoteAddr())
+						w.resultChan <- walletResult{err: err.Error()}
 						break
 					}
 					w.resultChan <- walletResult{err: fr.Error}

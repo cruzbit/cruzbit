@@ -6,6 +6,7 @@ package main
 import (
 	"bufio"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -85,7 +86,8 @@ func main() {
 		return wallet.SetFilter()
 	}
 
-	var newTxs, newConfs []*Transaction
+	var newTxs []*Transaction
+	var newConfs []*transactionWithHeight
 	var newTxsLock, newConfsLock, cmdLock sync.Mutex
 
 	// handle new incoming transactions
@@ -129,7 +131,7 @@ func main() {
 			}
 			newConfsLock.Lock()
 			showMessage := len(newConfs) == 0
-			newConfs = append(newConfs, tx)
+			newConfs = append(newConfs, &transactionWithHeight{tx: tx, height: fb.Header.Height})
 			newConfsLock.Unlock()
 			if showMessage {
 				go func() {
@@ -154,6 +156,7 @@ func main() {
 			{Text: "balance", Description: "Retrieve the current balance of all public keys"},
 			{Text: "send", Description: "Send cruzbits to someone"},
 			{Text: "show", Description: "Show new incoming transactions"},
+			{Text: "txstatus", Description: "Show confirmed transaction information given a transaction ID"},
 			{Text: "clearnew", Description: "Clear all pending incoming transaction notifications"},
 			{Text: "conf", Description: "Show new transaction confirmations"},
 			{Text: "clearconf", Description: "Clear all pending transaction confirmation notifications"},
@@ -163,6 +166,8 @@ func main() {
 	}
 
 	fmt.Println("Please select a command.")
+	fmt.Printf("To connect to your wallet peer you need to issue a command requiring it, e.g. %s\n",
+		aurora.Bold(aurora.Green("balance")))
 	for {
 		// run interactive prompt
 		cmd := prompt.Input("> ", completer)
@@ -276,6 +281,30 @@ func main() {
 			}
 			fmt.Printf("Transaction %s sent\n", id)
 
+		case "txstatus":
+			if err := connectWallet(); err != nil {
+				fmt.Printf("Error: %s\n", err)
+				break
+			}
+			txID, err := promptForTransactionID("ID: ", bufio.NewReader(os.Stdin))
+			if err != nil {
+				fmt.Printf("Error: %s\n", err)
+				break
+			}
+			fmt.Println("")
+			tx, _, height, err := wallet.GetTransaction(txID)
+			if err != nil {
+				fmt.Printf("Error: %s\n", err)
+				break
+			}
+			if tx == nil {
+				fmt.Printf("Transaction %s not found in the blockchain at this time.\n",
+					txID)
+				fmt.Println("It may be waiting for confirmation.")
+				break
+			}
+			showTransaction(wallet, tx, height)
+
 		case "show":
 			tx, left := func() (*Transaction, int) {
 				newTxsLock.Lock()
@@ -288,7 +317,7 @@ func main() {
 				return tx, len(newTxs)
 			}()
 			if tx != nil {
-				showTransaction(wallet, tx, false)
+				showTransaction(wallet, tx, 0)
 				if left > 0 {
 					fmt.Printf("\n%d new transaction(s) left to display. Type %s to continue.\n",
 						left, aurora.Bold(aurora.Green("show")))
@@ -305,7 +334,7 @@ func main() {
 			}()
 
 		case "conf":
-			tx, left := func() (*Transaction, int) {
+			tx, left := func() (*transactionWithHeight, int) {
 				newConfsLock.Lock()
 				defer newConfsLock.Unlock()
 				if len(newConfs) == 0 {
@@ -316,7 +345,7 @@ func main() {
 				return tx, len(newConfs)
 			}()
 			if tx != nil {
-				showTransaction(wallet, tx, true)
+				showTransaction(wallet, tx.tx, tx.height)
 				if left > 0 {
 					fmt.Printf("\n%d new confirmations(s) left to display. Type %s to continue.\n",
 						left, aurora.Bold(aurora.Green("conf")))
@@ -448,7 +477,26 @@ func promptForNumber(prompt string, reader *bufio.Reader) (int, error) {
 	return strconv.Atoi(strings.TrimSpace(text))
 }
 
-func showTransaction(w *Wallet, tx *Transaction, confirmed bool) {
+func promptForTransactionID(prompt string, reader *bufio.Reader) (TransactionID, error) {
+	fmt.Print(aurora.Bold(prompt))
+	text, err := reader.ReadString('\n')
+	if err != nil {
+		return TransactionID{}, err
+	}
+	text = strings.TrimSpace(text)
+	idBytes, err := hex.DecodeString(text)
+	if err != nil {
+		return TransactionID{}, err
+	}
+	if len(idBytes) != len(TransactionID{}) {
+		return TransactionID{}, fmt.Errorf("Invalid transaction ID")
+	}
+	var id TransactionID
+	copy(id[:], idBytes)
+	return id, nil
+}
+
+func showTransaction(w *Wallet, tx *Transaction, height int64) {
 	when := time.Unix(tx.Time, 0)
 	id, _ := tx.ID()
 	fmt.Printf("     %s: %s\n", aurora.Bold("ID"), id)
@@ -466,18 +514,21 @@ func showTransaction(w *Wallet, tx *Transaction, confirmed bool) {
 		fmt.Printf("   %s: %s\n", aurora.Bold("Memo"), tx.Memo)
 	}
 
-	if confirmed {
+	_, header, _ := w.GetTipHeader()
+	if height <= 0 {
+		if tx.Matures > 0 {
+			fmt.Printf("%s: cannot be mined until height: %d, current height: %d\n",
+				aurora.Bold("Matures"), tx.Matures, header.Height)
+		}
+		if tx.Expires > 0 {
+			fmt.Printf("%s: cannot be mined after height: %d, current height: %d\n",
+				aurora.Bold("Expires"), tx.Expires, header.Height)
+		}
 		return
 	}
-	_, header, _ := w.GetTipHeader()
-	if tx.Matures > 0 {
-		fmt.Printf("%s: cannot be mined until height: %d, current height: %d\n",
-			aurora.Bold("Matures"), tx.Matures, header.Height)
-	}
-	if tx.Expires > 0 {
-		fmt.Printf("%s: cannot be mined after height: %d, current height: %d\n",
-			aurora.Bold("Expires"), tx.Expires, header.Height)
-	}
+
+	fmt.Printf(" %s: confirmed at height %d, %d confirmation(s)\n",
+		aurora.Bold("Status"), height, (header.Height-height)+1)
 }
 
 // Catch filter false-positives
@@ -519,4 +570,9 @@ func promptForPassphrase() string {
 	}
 	fmt.Println("\n")
 	return passphrase
+}
+
+type transactionWithHeight struct {
+	tx     *Transaction
+	height int64
 }
