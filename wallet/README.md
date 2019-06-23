@@ -22,6 +22,6 @@ The `wallet` application is now in `$HOME/go/bin/wallet`.
 
 ## Usage
 
-You should only connect the wallet to a client peer you trust. A bad client can misbehave in all sorts of ways that could confuse your wallet and trick you into making transactions you otherwise wouldn't.
+You should only connect the wallet to a client peer you trust. A bad client can misbehave in all sorts of ways that could confuse your wallet and trick you into making transactions you otherwise wouldn't. You also expose which public keys you control to the peer.
 
 The prompt should be mostly self-documenting. Use the `newkey` command to generate a public/private key pair. The displayed public key can be used as the `-pubkey` argument to the [client program.](https://github.com/cruzbit/cruzbit/tree/master/client)
