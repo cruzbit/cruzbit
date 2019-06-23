@@ -27,3 +27,7 @@ If you missed out on the opportunity to mine other cryptocurrencies you could gi
 5. Run the client using the public key from step 4. as the `-pubkey` argument.
 
 Instead of mining with a single public key, you can also use the wallet to generate many keys and dump the public keys to a text file which the client will accept as a `-keyfile` argument. The wallet commands to do this are `genkeys` and `dumpkeys`.
+
+## Discussion
+
+There is a subbreddit for discussing issues and answering any questions you may have. Please feel free to ask anything in [r/cruzbit](https://www.reddit.com/r/cruzbit/) on Reddit.
