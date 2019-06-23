@@ -257,7 +257,7 @@ func (p *Processor) processTransaction(id TransactionID, tx *Transaction, source
 		return err
 	}
 	if !ok {
-		return fmt.Errorf("Signature verification failed for %s\n", id)
+		return fmt.Errorf("Signature verification failed for %s", id)
 	}
 
 	// rejects a transaction if sender would have insufficient balance
