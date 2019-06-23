@@ -30,4 +30,4 @@ Instead of mining with a single public key, you can also use the wallet to gener
 
 ## Discussion
 
-There is a subbreddit for discussing issues and answering any questions you may have. Please feel free to ask anything in [r/cruzbit](https://www.reddit.com/r/cruzbit/) on Reddit.
+There is a subreddit for discussing issues and answering any questions you may have. Please feel free to ask anything in [r/cruzbit](https://www.reddit.com/r/cruzbit/) on Reddit.
