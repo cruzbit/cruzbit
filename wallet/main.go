@@ -484,6 +484,9 @@ func promptForTransactionID(prompt string, reader *bufio.Reader) (TransactionID,
 		return TransactionID{}, err
 	}
 	text = strings.TrimSpace(text)
+	if len(text) != 2*(len(TransactionID{})) {
+		return TransactionID{}, fmt.Errorf("Invalid transaction ID")
+	}
 	idBytes, err := hex.DecodeString(text)
 	if err != nil {
 		return TransactionID{}, err
