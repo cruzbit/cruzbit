@@ -16,6 +16,10 @@ cruzbit is very similar to [bitcoin](https://www.bitcoin.com/bitcoin.pdf) with t
 
 I noticed most people focusing on making more complex ledgers capable of executing "smart" contracts and/or crypto-magically obscuring transaction details and such. And I think those projects are pretty cool, but I'd always wanted to attempt to do the opposite and implement the simplest decentralized ledger I possibly could given lessons learned from bitcoin. I _think_ that's what cruzbit is. Anything that I thought wasn't strictly necessary in bitcoin, or was otherwise weird, I got rid of. I wanted the design to be conceptually simple and extremely developer-friendly. I finally had some personal time on my hands so I decided, why not. And now cruzbit exists.
 
+## Warning
+
+cruzbit is extremely experimental alpha-quality software. There may be bugs.
+
 ## Getting started mining
 
 If you missed out on the opportunity to mine other cryptocurrencies you could give cruzbit a try!
