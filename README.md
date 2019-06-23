@@ -32,6 +32,10 @@ If you missed out on the opportunity to mine other cryptocurrencies you could gi
 
 Instead of mining with a single public key, you can also use the wallet to generate many keys and dump the public keys to a text file which the client will accept as a `-keyfile` argument. The wallet commands to do this are `genkeys` and `dumpkeys`.
 
+## Not interested in mining but want to play with cruzbit?
+
+No problem! Post a public key as a comment in [this thread](https://www.reddit.com/r/cruzbit/comments/c4cqx9/want_some_cruzbits_to_testplay_with/) and I'll send you some! Offer limited while supplies last :)
+
 ## Discussion
 
 There is a subreddit for discussing issues and answering any questions you may have. Please feel free to ask anything in [r/cruzbit](https://www.reddit.com/r/cruzbit/) on Reddit.
