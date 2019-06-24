@@ -709,24 +709,24 @@ func computeTarget(prevHeader *BlockHeader, blockStore BlockStorage) (BlockID, e
 		actualTimespan = maxTimespan
 	}
 
-	actualTimespanBig := big.NewInt(actualTimespan)
-	retargetTimeBig := big.NewInt(RETARGET_TIME)
+	actualTimespanInt := big.NewInt(actualTimespan)
+	retargetTimeInt := big.NewInt(RETARGET_TIME)
 
 	initialTargetBytes, err := hex.DecodeString(INITIAL_TARGET)
 	if err != nil {
 		return BlockID{}, err
 	}
 
-	maxTarget := big.NewInt(0).SetBytes(initialTargetBytes)
-	prevTarget := big.NewInt(0).SetBytes(prevHeader.Target[:])
-	newTarget := big.NewInt(0).Mul(prevTarget, actualTimespanBig)
-	newTarget = newTarget.Div(newTarget, retargetTimeBig)
+	maxTargetInt := new(big.Int).SetBytes(initialTargetBytes)
+	prevTargetInt := new(big.Int).SetBytes(prevHeader.Target[:])
+	newTargetInt := new(big.Int).Mul(prevTargetInt, actualTimespanInt)
+	newTargetInt.Div(newTargetInt, retargetTimeInt)
 
 	var target BlockID
-	if newTarget.Cmp(maxTarget) > 0 {
-		target.SetBigInt(maxTarget)
+	if newTargetInt.Cmp(maxTargetInt) > 0 {
+		target.SetBigInt(maxTargetInt)
 	} else {
-		target.SetBigInt(newTarget)
+		target.SetBigInt(newTargetInt)
 	}
 
 	return target, nil
