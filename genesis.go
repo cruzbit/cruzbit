@@ -5,7 +5,7 @@ package cruzbit
 
 // GenesisBlockJson is the first block in the chain.
 // The memo field is the hash of the tip of the bitcoin blockchain at the time of this block's creation.
-var GenesisBlockJson = `
+const GenesisBlockJson = `
 {
   "header": {
     "previous": "0000000000000000000000000000000000000000000000000000000000000000",

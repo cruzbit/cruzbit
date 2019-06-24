@@ -5,8 +5,8 @@ package cruzbit
 
 // PeerStorage is an interface for storing peer addresses and information about their connectivity.
 type PeerStorage interface {
-	// Store stores a peer address.
-	Store(addr string) error
+	// Store stores a peer address. Returns true if the peer was newly added to storage.
+	Store(addr string) (bool, error)
 
 	// Get returns some peers for us to attempt to connect to.
 	Get(count int) ([]string, error)

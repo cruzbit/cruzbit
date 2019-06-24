@@ -34,33 +34,36 @@ func NewPeerStorageDisk(dbPath string) (*PeerStorageDisk, error) {
 	return &PeerStorageDisk{db: db, connectedPeers: make(map[string]bool)}, nil
 }
 
-// Store stores a peer address.
-func (p *PeerStorageDisk) Store(addr string) error {
+// Store stores a peer address. Returns true if the peer was newly added to storage.
+func (p *PeerStorageDisk) Store(addr string) (bool, error) {
 	// do we know about it already?
 	pi, err := getPeerInfo(addr, p.db)
 	if err != nil {
-		return err
+		return false, err
 	}
 	if pi != nil {
 		// we've seen it
-		return nil
+		return false, nil
 	}
 
 	info := peerInfo{FirstSeen: time.Now().Unix()}
 	batch := new(leveldb.Batch)
 	if err := info.writeToBatch(addr, batch); err != nil {
-		return err
+		return false, err
 	}
 
 	// compute last attempt by time db key
 	attemptKey, err := computeLastAttemptTimeKey(info.LastAttempt, addr)
 	if err != nil {
-		return err
+		return false, err
 	}
 	batch.Put(attemptKey, []byte{0x1})
 
 	// write the batch
-	return p.db.Write(batch, nil)
+	if err := p.db.Write(batch, nil); err != nil {
+		return false, err
+	}
+	return true, nil
 }
 
 // Get returns some peers for us to attempt to connect to.

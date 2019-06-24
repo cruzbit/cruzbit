@@ -137,6 +137,9 @@ const (
 
 	// How often should we request peer addresses from a peer
 	getPeerAddressesPeriod = 1 * time.Hour
+
+	// Time allowed between processing new blocks before we consider a blockchain sync stalled
+	syncWait = 2 * time.Minute
 )
 
 // Run executes the peer's main loop in its own goroutine.
@@ -401,11 +404,29 @@ func (p *Peer) run() {
 		}
 	}()
 
+	// are we syncing?
+	lastNewBlockTime := time.Now()
+	ibd, _, err := IsInitialBlockDownload(p.ledger, p.blockStore)
+	if err != nil {
+		log.Println(err)
+		return
+	}
+
 	// reader loop
 	p.conn.SetReadDeadline(time.Now().Add(pongWait))
 	p.conn.SetPongHandler(func(string) error {
+		if ibd {
+			// handle stalled blockchain syncs
+			var err error
+			ibd, _, err = IsInitialBlockDownload(p.ledger, p.blockStore)
+			if err != nil {
+				return err
+			}
+			if ibd && time.Since(lastNewBlockTime) > syncWait {
+				return fmt.Errorf("Sync has stalled, disconnecting")
+			}
+		}
 		p.conn.SetReadDeadline(time.Now().Add(pongWait))
-		//log.Printf("Received pong message from: %s\n", p.conn.RemoteAddr())
 		return nil
 	})
 	for {
@@ -483,9 +504,13 @@ func (p *Peer) run() {
 					log.Printf("Error: %s, from: %s\n", err, p.conn.RemoteAddr())
 					return
 				}
-				if err := p.onBlock(b.Block, outChan); err != nil {
+				ok, err := p.onBlock(b.Block, outChan)
+				if err != nil {
 					log.Printf("Error: %s, from: %s\n", err, p.conn.RemoteAddr())
 					break
+				}
+				if ok {
+					lastNewBlockTime = time.Now()
 				}
 
 			case "find_common_ancestor":
@@ -763,13 +788,13 @@ func (p *Peer) getBlock(id BlockID, outChan chan<- Message) error {
 	return nil
 }
 
-// Handle receiving a block from a peer
-func (p *Peer) onBlock(block *Block, outChan chan<- Message) error {
+// Handle receiving a block from a peer. Returns true if the block was newly processed and accepted.
+func (p *Peer) onBlock(block *Block, outChan chan<- Message) (bool, error) {
 	// the message has the ID in it but we can't trust that.
 	// it's provided as convenience for trusted peering relationships only
 	id, err := block.ID()
 	if err != nil {
-		return err
+		return false, err
 	}
 
 	log.Printf("Received block: %s, from: %s\n", id, p.conn.RemoteAddr())
@@ -777,36 +802,39 @@ func (p *Peer) onBlock(block *Block, outChan chan<- Message) error {
 	if len(p.blocksInflightQueue) == 0 {
 		// disconnect misbehaving peer
 		p.conn.Close()
-		return fmt.Errorf("Received unrequested block")
+		return false, fmt.Errorf("Received unrequested block")
 	}
 	if p.blocksInflightQueue[0] != id {
 		// disconnect misbehaving peer
 		p.conn.Close()
-		return fmt.Errorf("Received unrequested block")
+		return false, fmt.Errorf("Received unrequested block")
 	}
 	p.blocksInflightQueue = p.blocksInflightQueue[1:]
 	delete(p.blocksInflightMap, id)
 
+	var accepted bool
+
 	// is it an orphan?
 	header, _, err := p.blockStore.GetBlockHeader(block.Header.Previous)
 	if err != nil {
-		log.Printf("Error: %s\n", err)
-		return nil
+		return false, err
 	}
 	if header == nil {
 		log.Printf("Block %s is an orphan, sending find_common_ancestor to: %s\n",
 			id, p.conn.RemoteAddr())
 		// send a find common ancestor request
 		if err := p.sendFindCommonAncestor(nil, false, outChan); err != nil {
-			return err
+			return false, err
 		}
 	} else {
 		// process the block
 		if err := p.processor.ProcessBlock(id, block, p.conn.RemoteAddr().String()); err != nil {
 			// disconnect a peer that sends us a bad block
 			p.conn.Close()
-			return err
+			return false, err
 		}
+		// newly accepted block
+		accepted = true
 	}
 
 	log.Printf("Download queue size: %d, inflight queue size: %d\n",
@@ -814,7 +842,7 @@ func (p *Peer) onBlock(block *Block, outChan chan<- Message) error {
 
 	// dequeue another get_block request if needed
 	if len(p.blocksToDownloadQueue) == 0 {
-		return nil
+		return accepted, nil
 	}
 
 	p.blocksInflightQueue = append(p.blocksInflightQueue, p.blocksToDownloadQueue[0])
@@ -822,7 +850,7 @@ func (p *Peer) onBlock(block *Block, outChan chan<- Message) error {
 	lastInflight := p.blocksInflightQueue[len(p.blocksInflightQueue)-1]
 	log.Printf("Sending get_block for %s, to: %s\n", lastInflight, p.conn.RemoteAddr())
 	outChan <- Message{Type: "get_block", Body: GetBlockMessage{BlockID: lastInflight}}
-	return nil
+	return accepted, nil
 }
 
 // Send a message to look for a common ancestor with a peer
@@ -1323,9 +1351,9 @@ func (p *Peer) onPeerAddresses(addresses []string) {
 
 // Update the read limit if necessary
 func (p *Peer) updateReadLimit() {
-	ok, height, err := p.IsInitialBlockDownload()
+	ok, height, err := IsInitialBlockDownload(p.ledger, p.blockStore)
 	if err != nil {
-		log.Println(err)
+		log.Fatal(err)
 	}
 
 	p.readLimitLock.Lock()
@@ -1346,19 +1374,4 @@ func (p *Peer) getReadLimit() int64 {
 	p.readLimitLock.RLock()
 	defer p.readLimitLock.RUnlock()
 	return p.readLimit
-}
-
-// IsInitialBlockDownload returns true if it appears we're still syncing the block chain.
-func (p *Peer) IsInitialBlockDownload() (bool, int64, error) {
-	tipID, tipHeader, _, err := getChainTipHeader(p.ledger, p.blockStore)
-	if err != nil {
-		return false, 0, err
-	}
-	if tipID == nil {
-		return true, 0, nil
-	}
-	if tipHeader == nil {
-		return true, 0, nil
-	}
-	return tipHeader.Time < (time.Now().Unix() - MAX_TIP_AGE), tipHeader.Height, nil
 }

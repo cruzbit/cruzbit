@@ -31,6 +31,7 @@ type PeerManager struct {
 	peer            string
 	port            int
 	accept          bool
+	accepting       bool
 	irc             bool
 	inPeers         map[string]*Peer
 	outPeers        map[string]*Peer
@@ -130,7 +131,7 @@ func (p *PeerManager) run() {
 	var irc *IRC
 	if len(p.peer) != 0 {
 		// store the explicitly specified outbound peer
-		if err := p.peerStore.Store(p.peer); err != nil {
+		if _, err := p.peerStore.Store(p.peer); err != nil {
 			log.Printf("Error saving peer: %s, address: %s\n", err, p.peer)
 		}
 	} else {
@@ -161,14 +162,8 @@ func (p *PeerManager) run() {
 		}
 	}
 
-	// handle incoming peers
-	if p.accept == true {
-		p.wg.Add(1)
-		go func() {
-			defer p.wg.Done()
-			p.acceptConnections()
-		}()
-	}
+	// handle listening for inbound peers
+	p.listenForPeers()
 
 	// try connecting to some saved peers
 	p.connectToPeers()
@@ -181,27 +176,36 @@ func (p *PeerManager) run() {
 	for {
 		select {
 		case addr := <-p.addrChan:
-			log.Printf("Discovered peer: %s\n", addr)
-
 			// parse, resolve and validate the address
 			host, port, err := p.parsePeerAddress(addr)
 			if err != nil {
-				log.Printf("Peer address invalid: %s\n", err)
 				continue
 			}
 
 			// store the peer
 			resolvedAddr := host + ":" + port
-			log.Printf("Storing peer as: %s\n", resolvedAddr)
-			if err := p.peerStore.Store(resolvedAddr); err != nil {
+			ok, err := p.peerStore.Store(resolvedAddr)
+			if err != nil {
 				log.Printf("Error saving peer: %s, address: %s\n", err, resolvedAddr)
 				continue
 			}
+			if !ok {
+				// we already knew about this peer address
+				continue
+			}
+			log.Printf("Discovered new peer: %s\n", resolvedAddr)
 
 			// try connecting to some saved peers
 			p.connectToPeers()
 
 		case <-ticker.C:
+			outCount, inCount := p.outboundPeerCount(), p.inboundPeerCount()
+			log.Printf("Have %d outbound connections and %d inbound connections\n",
+				outCount, inCount)
+
+			// handle listening for inbound peers
+			p.listenForPeers()
+
 			// periodically try connecting to some saved peers
 			p.connectToPeers()
 
@@ -280,23 +284,65 @@ func (p *PeerManager) connectToPeers() error {
 		return nil
 	}
 
-	// otherwise try to keep us maximally connected
-	want := MAX_OUTBOUND_PEER_CONNECTIONS - p.outboundPeerCount()
-	if want <= 0 {
-		return nil
-	}
-	addrs, err := p.peerStore.Get(want)
+	// are we syncing?
+	ibd, _, err := IsInitialBlockDownload(p.ledger, p.blockStore)
 	if err != nil {
 		return err
 	}
-	for _, addr := range addrs {
-		log.Printf("Attempting to connect to: %s\n", addr)
-		if err := p.connect(addr); err != nil {
-			log.Printf("Error connecting to peer: %s\n", err)
-		} else {
-			log.Printf("Connected to peer: %s\n", addr)
-		}
+
+	var want int
+	if ibd {
+		// only connect to a single peer until we're synced
+		want = 1
+	} else {
+		// otherwise try to keep us maximally connected
+		want = MAX_OUTBOUND_PEER_CONNECTIONS
 	}
+
+	count := p.outboundPeerCount()
+	need := want - count
+	if need <= 0 {
+		return nil
+	}
+
+	tried := make(map[string]bool)
+
+	log.Printf("Have %d outbound connections, want %d. Trying some peer addresses now\n",
+		count, want)
+
+	// try to satisfy desired outbound peer count
+	for need > 0 {
+		addrs, err := p.peerStore.Get(need)
+		if err != nil {
+			return err
+		}
+		if len(addrs) == 0 {
+			// no more attempts possible at the moment
+			log.Println("No more peer addresses to try right now")
+			return nil
+		}
+		for _, addr := range addrs {
+			if tried[addr] {
+				// we already tried this peer address.
+				// this shouldn't really be necessary if peer storage is respecting
+				// proper retry intervals but it doesn't hurt to be safe
+				log.Printf("Already tried to connect to %s this time, will try again later\n",
+					addr)
+				return nil
+			}
+			tried[addr] = true
+			log.Printf("Attempting to connect to: %s\n", addr)
+			if err := p.connect(addr); err != nil {
+				log.Printf("Error connecting to peer: %s\n", err)
+			} else {
+				log.Printf("Connected to peer: %s\n", addr)
+			}
+		}
+		count = p.outboundPeerCount()
+		need = want - count
+	}
+
+	log.Printf("Have %d outbound connections. Done trying new peer addresses\n", count)
 	return nil
 }
 
@@ -309,7 +355,7 @@ func (p *PeerManager) connect(addr string) error {
 	}
 
 	var myAddress string
-	if p.open {
+	if p.accepting && p.open {
 		// advertise ourself as open
 		myAddress = p.myIP + ":" + strconv.Itoa(p.port)
 	}
@@ -326,6 +372,38 @@ func (p *PeerManager) connect(addr string) error {
 	peer.Run()
 
 	return nil
+}
+
+// Check to see if it's time to start accepting connections and do so if necessary
+func (p *PeerManager) listenForPeers() bool {
+	if p.accept == false {
+		return false
+	}
+	if p.accepting == true {
+		return true
+	}
+
+	// don't accept new connections while we're syncing
+	ibd, _, err := IsInitialBlockDownload(p.ledger, p.blockStore)
+	if err != nil {
+		log.Fatal(err)
+	}
+	if ibd {
+		log.Println("We're still syncing. Not accepting new connections yet")
+		return false
+	}
+
+	p.accepting = true
+	p.wg.Add(1)
+	go func() {
+		defer p.wg.Done()
+		p.acceptConnections()
+	}()
+
+	// give us some time to generate a certificate and start listening
+	// so we can correctly report connectivity to outbound peers
+	time.Sleep(5 * time.Second)
+	return true
 }
 
 // Accept incoming peer connections
@@ -365,7 +443,7 @@ func (p *PeerManager) acceptConnections() {
 				}
 
 				// save their address for later use
-				if err := p.peerStore.Store(theirAddress); err != nil {
+				if _, err := p.peerStore.Store(theirAddress); err != nil {
 					log.Printf("Error saving peer: %s, address: %s\n", err, theirAddress)
 				}
 			}
@@ -541,4 +619,19 @@ func determineExternalIP() (string, error) {
 		return "", err
 	}
 	return ip.String(), nil
+}
+
+// IsInitialBlockDownload returns true if it appears we're still syncing the block chain.
+func IsInitialBlockDownload(ledger Ledger, blockStore BlockStorage) (bool, int64, error) {
+	tipID, tipHeader, _, err := getChainTipHeader(ledger, blockStore)
+	if err != nil {
+		return false, 0, err
+	}
+	if tipID == nil {
+		return true, 0, nil
+	}
+	if tipHeader == nil {
+		return true, 0, nil
+	}
+	return tipHeader.Time < (time.Now().Unix() - MAX_TIP_AGE), tipHeader.Height, nil
 }
