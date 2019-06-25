@@ -118,6 +118,7 @@ func (d *DNSSeeder) Shutdown() {
 var Seeders = [...]string{
 	"66.172.27.47:8831",
 	"66.172.12.98:8831",
+	"66.117.62.146:8831",
 }
 
 // Query DNS seeders
