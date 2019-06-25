@@ -704,6 +704,10 @@ func (p *Peer) onInvBlock(id BlockID, index, length int, outChan chan<- Message)
 	}
 	if branchType != UNKNOWN {
 		log.Printf("Already processed block %s", id)
+		if length > 1 && index+1 == length {
+			// we might be on a deep side chain. this will get us the next 500 blocks
+			return p.sendFindCommonAncestor(&id, false, outChan)
+		}
 		return nil
 	}
 
@@ -863,9 +867,17 @@ func (p *Peer) sendFindCommonAncestor(startID *BlockID, writeNow bool, outChan c
 		var err error
 		startID, height, err = p.ledger.GetChainTip()
 		if err != nil {
-			log.Printf("Error: %s\n", err)
-			return nil
+			return err
 		}
+	} else {
+		header, _, err := p.blockStore.GetBlockHeader(*startID)
+		if err != nil {
+			return err
+		}
+		if header == nil {
+			return fmt.Errorf("No header for block %s", *startID)
+		}
+		height = header.Height
 	}
 	id := startID
 
