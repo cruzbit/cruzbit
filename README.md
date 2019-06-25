@@ -30,7 +30,9 @@ If you missed out on the opportunity to mine other cryptocurrencies you could gi
 4. Install the [client](https://github.com/cruzbit/cruzbit/tree/master/client)
 5. Run the client using the public key from step 4. as the `-pubkey` argument.
 
-Instead of mining with a single public key, you can also use the wallet to generate many keys and dump the public keys to a text file which the client will accept as a `-keyfile` argument. The wallet commands to do this are `genkeys` and `dumpkeys`.
+Like bitcoin, any blocks you mine will need to have an additional 100 blocks mined on top of them prior to the new cruzbits being applied to your balance. This is to mititage a potentially poor user experience in the case of honest blockchain reorganizations.
+
+Also note, instead of mining with a single public key, you can also use the wallet to generate many keys and dump the public keys to a text file which the client will accept as a `-keyfile` argument. The wallet commands to do this are `genkeys` and `dumpkeys`.
 
 ## Not interested in mining but want to play with cruzbit?
 
