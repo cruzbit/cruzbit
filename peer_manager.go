@@ -135,6 +135,17 @@ func (p *PeerManager) run() {
 			log.Printf("Error saving peer: %s, address: %s\n", err, p.peer)
 		}
 	} else {
+		// query dns seeds for peers
+		addresses, err := dnsQueryForPeers()
+		if err != nil {
+			log.Printf("Error from DNS query: %s\n", err)
+		} else {
+			for _, addr := range addresses {
+				log.Printf("Got peer address from DNS: %s\n", addr)
+				p.addrChan <- addr
+			}
+		}
+
 		// handle IRC seeding
 		if p.irc == true {
 			port := p.port
@@ -147,17 +158,6 @@ func (p *PeerManager) run() {
 				log.Println(err)
 			} else {
 				irc.Run()
-			}
-		}
-
-		// query dns seeds for peers
-		addresses, err := dnsQueryForPeers()
-		if err != nil {
-			log.Printf("Error from DNS query: %s\n", err)
-		} else {
-			for _, addr := range addresses {
-				log.Printf("Got peer address from DNS: %s\n", addr)
-				p.addrChan <- addr
 			}
 		}
 	}
