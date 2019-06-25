@@ -4,6 +4,7 @@
 package cruzbit
 
 import (
+	"fmt"
 	"log"
 	"math/big"
 	"math/rand"
@@ -184,7 +185,15 @@ func (m *Miner) createNextBlock(tipID BlockID, tipHeader *BlockHeader) (*Block, 
 	reward := BlockCreationReward(newHeight) + fees
 
 	// build coinbase
-	tx := NewTransaction(nil, m.pubKeys[m.keyIndex], reward, 0, 0, 0, newHeight, m.memo)
+	var memo string
+	if len(m.memo) != 0 {
+		memo = m.memo
+	} else {
+		// try harder to avoid doing stale work in multithreaded environments.
+		// there is an assumption in this code that each core isn't going to surpass 2^53-1 attempts per 30 seconds.
+		memo = fmt.Sprintf("%d", rand.Int31())
+	}
+	tx := NewTransaction(nil, m.pubKeys[m.keyIndex], reward, 0, 0, 0, newHeight, memo)
 
 	// prepend coinbase
 	txs = append([]*Transaction{tx}, txs...)
