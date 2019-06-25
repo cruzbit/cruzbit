@@ -306,6 +306,10 @@ func main() {
 			showTransaction(wallet, tx, height)
 
 		case "show":
+			if err := connectWallet(); err != nil {
+				fmt.Printf("Error: %s\n", err)
+				break
+			}
 			tx, left := func() (*Transaction, int) {
 				newTxsLock.Lock()
 				defer newTxsLock.Unlock()
@@ -334,6 +338,10 @@ func main() {
 			}()
 
 		case "conf":
+			if err := connectWallet(); err != nil {
+				fmt.Printf("Error: %s\n", err)
+				break
+			}
 			tx, left := func() (*transactionWithHeight, int) {
 				newConfsLock.Lock()
 				defer newConfsLock.Unlock()
