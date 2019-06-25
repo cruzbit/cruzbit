@@ -292,8 +292,8 @@ func (p *PeerManager) connectToPeers() error {
 
 	var want int
 	if ibd {
-		// only connect to a single peer until we're synced
-		want = 1
+		// only connect to 3 peers until we're synced
+		want = 3
 	} else {
 		// otherwise try to keep us maximally connected
 		want = MAX_OUTBOUND_PEER_CONNECTIONS
