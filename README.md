@@ -18,7 +18,7 @@ I noticed most people focusing on making more complex ledgers capable of executi
 
 ## Warning
 
-cruzbit is extremely experimental alpha-quality software. There may be bugs.
+cruzbit is experimental alpha-quality software. There may be bugs.
 
 ## Getting started mining
 
@@ -32,7 +32,7 @@ If you missed out on the opportunity to mine other cryptocurrencies you could gi
 
 Like bitcoin, any blocks you mine will need to have an additional 100 blocks mined on top of them prior to the new cruzbits being applied to your balance. This is to mitigate a potentially poor user experience in the case of honest blockchain reorganizations.
 
-Also note, instead of mining with a single public key, you can also use the wallet to generate many keys and dump the public keys to a text file which the client will accept as a `-keyfile` argument. The wallet commands to do this are `genkeys` and `dumpkeys`.
+Also note, instead of mining with a single public key, you can use the wallet to generate many keys and dump the public keys to a text file which the client will accept as a `-keyfile` argument. The wallet commands to do this are `genkeys` and `dumpkeys`.
 
 ## Not interested in mining but want to play with cruzbit?
 
