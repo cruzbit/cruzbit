@@ -22,24 +22,24 @@ import (
 // Peer is a peer client in the network. They all speak WebSocket protocol to each other.
 // Peers could be fully validating and mining nodes or simply wallets.
 type Peer struct {
-	conn                  *websocket.Conn
-	genesisID             BlockID
-	peerStore             PeerStorage
-	blockStore            BlockStorage
-	ledger                Ledger
-	processor             *Processor
-	txQueue               TransactionQueue
-	outbound              bool
-	blocksToDownloadQueue []BlockID
-	blocksInflightQueue   []BlockID
-	blocksInflightMap     map[BlockID]bool
-	continuationBlockID   BlockID
-	filter                *cuckoo.Filter
-	addrChan              chan<- string
-	readLimitLock         sync.RWMutex
-	readLimit             int64
-	closeHandler          func()
-	wg                    sync.WaitGroup
+	conn                *websocket.Conn
+	genesisID           BlockID
+	peerStore           PeerStorage
+	blockStore          BlockStorage
+	ledger              Ledger
+	processor           *Processor
+	txQueue             TransactionQueue
+	outbound            bool
+	localDownloadQueue  *BlockDownloadQueue // peer-local download queue
+	localInflightQueue  *BlockDownloadQueue // peer-local inflight queue
+	globalInflightQueue *BlockDownloadQueue // global inflight queue
+	continuationBlockID BlockID
+	filter              *cuckoo.Filter
+	addrChan            chan<- string
+	readLimitLock       sync.RWMutex
+	readLimit           int64
+	closeHandler        func()
+	wg                  sync.WaitGroup
 }
 
 // PeerUpgrader upgrades the incoming HTTP connection to a WebSocket if the subprotocol matches.
@@ -51,17 +51,19 @@ var PeerUpgrader = websocket.Upgrader{
 // NewPeer returns a new instance of a peer.
 func NewPeer(conn *websocket.Conn, genesisID BlockID, peerStore PeerStorage,
 	blockStore BlockStorage, ledger Ledger, processor *Processor,
-	txQueue TransactionQueue, addrChan chan<- string) *Peer {
+	txQueue TransactionQueue, inflightQueue *BlockDownloadQueue, addrChan chan<- string) *Peer {
 	peer := &Peer{
-		conn:              conn,
-		genesisID:         genesisID,
-		peerStore:         peerStore,
-		blockStore:        blockStore,
-		ledger:            ledger,
-		processor:         processor,
-		txQueue:           txQueue,
-		blocksInflightMap: make(map[BlockID]bool),
-		addrChan:          addrChan,
+		conn:                conn,
+		genesisID:           genesisID,
+		peerStore:           peerStore,
+		blockStore:          blockStore,
+		ledger:              ledger,
+		processor:           processor,
+		txQueue:             txQueue,
+		localDownloadQueue:  NewBlockDownloadQueue(),
+		localInflightQueue:  NewBlockDownloadQueue(),
+		globalInflightQueue: inflightQueue,
+		addrChan:            addrChan,
 	}
 	peer.updateReadLimit()
 	return peer
@@ -121,7 +123,6 @@ func (p *Peer) Shutdown() {
 	}
 }
 
-// Timing constants
 const (
 	// Time allowed to write a message to the peer
 	writeWait = 30 * time.Second
@@ -140,6 +141,15 @@ const (
 
 	// Time allowed between processing new blocks before we consider a blockchain sync stalled
 	syncWait = 2 * time.Minute
+
+	// Maximum blocks per inv_block message
+	maxBlocksPerInv = 500
+
+	// Maximum local inflight queue size
+	inflightMax = 8
+
+	// Maximum local download queue size
+	downloadQueueMax = maxBlocksPerInv * 2
 )
 
 // Run executes the peer's main loop in its own goroutine.
@@ -155,6 +165,7 @@ func (p *Peer) run() {
 		defer p.closeHandler()
 	}
 	defer p.conn.Close()
+	peerAddr := p.conn.RemoteAddr().String()
 
 	// written to by the reader loop to send outgoing messages to the writer loop
 	outChan := make(chan Message, 1)
@@ -202,9 +213,8 @@ func (p *Peer) run() {
 		defer tickerGetPeerAddresses.Stop()
 
 		// update the peer store on disconnection
-		addr := p.conn.RemoteAddr().String()
 		if p.outbound {
-			defer p.peerStore.OnDisconnect(addr)
+			defer p.peerStore.OnDisconnect(peerAddr)
 		}
 
 		for {
@@ -412,8 +422,7 @@ func (p *Peer) run() {
 		return
 	}
 
-	// reader loop
-	p.conn.SetReadDeadline(time.Now().Add(pongWait))
+	// handle pongs
 	p.conn.SetPongHandler(func(string) error {
 		if ibd {
 			// handle stalled blockchain syncs
@@ -425,10 +434,21 @@ func (p *Peer) run() {
 			if ibd && time.Since(lastNewBlockTime) > syncWait {
 				return fmt.Errorf("Sync has stalled, disconnecting")
 			}
+		} else {
+			// try processing the queue in case we've been blocked by another client
+			// and their attempt has now expired
+			if err := p.processDownloadQueue(outChan); err != nil {
+				return err
+			}
 		}
 		p.conn.SetReadDeadline(time.Now().Add(pongWait))
 		return nil
 	})
+
+	// set initial read deadline
+	p.conn.SetReadDeadline(time.Now().Add(pongWait))
+
+	// reader loop
 	for {
 		// update read limit
 		p.conn.SetReadLimit(p.getReadLimit())
@@ -683,14 +703,27 @@ func (p *Peer) run() {
 			break
 		}
 	}
+
+	// remove any inflight blocks this peer is no longer going to download
+	blockInflight, ok := p.localInflightQueue.PeekFront()
+	for ok {
+		p.localInflightQueue.Remove(blockInflight, "")
+		p.globalInflightQueue.Remove(blockInflight, peerAddr)
+		blockInflight, ok = p.localInflightQueue.PeekFront()
+	}
 }
 
 // Handle a message from a peer indicating block inventory available for download
 func (p *Peer) onInvBlock(id BlockID, index, length int, outChan chan<- Message) error {
 	log.Printf("Received inv_block: %s, from: %s\n", id, p.conn.RemoteAddr())
 
-	// is it queued or inflight already?
-	if _, ok := p.blocksInflightMap[id]; ok {
+	if length > maxBlocksPerInv {
+		return fmt.Errorf("%d blocks IDs is more than %d maximum per inv_block",
+			length, maxBlocksPerInv)
+	}
+
+	// do we have it queued or inflight already?
+	if p.localDownloadQueue.Exists(id) || p.localInflightQueue.Exists(id) {
 		log.Printf("Block %s is already queued or inflight for download, from: %s\n",
 			id, p.conn.RemoteAddr())
 		return nil
@@ -699,8 +732,7 @@ func (p *Peer) onInvBlock(id BlockID, index, length int, outChan chan<- Message)
 	// have we processed it?
 	branchType, err := p.ledger.GetBranchType(id)
 	if err != nil {
-		log.Printf("Error: %s\n", err)
-		return nil
+		return err
 	}
 	if branchType != UNKNOWN {
 		log.Printf("Already processed block %s", id)
@@ -711,21 +743,18 @@ func (p *Peer) onInvBlock(id BlockID, index, length int, outChan chan<- Message)
 		return nil
 	}
 
-	log.Printf("Download queue size: %d, inflight queue size: %d\n",
-		len(p.blocksToDownloadQueue), len(p.blocksInflightQueue))
-
-	// add block to download queue
-	p.blocksToDownloadQueue = append(p.blocksToDownloadQueue, id)
-	p.blocksInflightMap[id] = true
-	if len(p.blocksInflightQueue) < MAX_BLOCKS_IN_TRANSIT_PER_PEER {
-		// send the next pending block request
-		p.blocksInflightQueue = append(p.blocksInflightQueue, p.blocksToDownloadQueue[0])
-		p.blocksToDownloadQueue = p.blocksToDownloadQueue[1:]
-		lastInflight := p.blocksInflightQueue[len(p.blocksInflightQueue)-1]
-		log.Printf("Sending get_block for %s, to: %s\n", lastInflight, p.conn.RemoteAddr())
-		outChan <- Message{Type: "get_block", Body: GetBlockMessage{BlockID: id}}
+	if p.localDownloadQueue.Len() >= downloadQueueMax {
+		log.Printf("Too many blocks in the download queue %d, max: %d, for: %s",
+			p.localDownloadQueue.Len(), downloadQueueMax, p.conn.RemoteAddr())
+		// don't return an error just stop adding them to the queue
+		return nil
 	}
-	return nil
+
+	// add block to this peer's download queue
+	p.localDownloadQueue.PushBack(id, "")
+
+	// process the download queue
+	return p.processDownloadQueue(outChan)
 }
 
 // Handle a request for a block from a peer
@@ -803,29 +832,28 @@ func (p *Peer) onBlock(block *Block, outChan chan<- Message) (bool, error) {
 
 	log.Printf("Received block: %s, from: %s\n", id, p.conn.RemoteAddr())
 
-	if len(p.blocksInflightQueue) == 0 {
+	blockInFlight, ok := p.localInflightQueue.PeekFront()
+	if !ok || blockInFlight != id {
 		// disconnect misbehaving peer
 		p.conn.Close()
 		return false, fmt.Errorf("Received unrequested block")
 	}
-	if p.blocksInflightQueue[0] != id {
-		// disconnect misbehaving peer
-		p.conn.Close()
-		return false, fmt.Errorf("Received unrequested block")
-	}
-	p.blocksInflightQueue = p.blocksInflightQueue[1:]
-	delete(p.blocksInflightMap, id)
 
 	var accepted bool
 
 	// is it an orphan?
 	header, _, err := p.blockStore.GetBlockHeader(block.Header.Previous)
-	if err != nil {
-		return false, err
-	}
-	if header == nil {
+	if err != nil || header == nil {
+		p.localInflightQueue.Remove(id, "")
+		p.globalInflightQueue.Remove(id, p.conn.RemoteAddr().String())
+
+		if err != nil {
+			return false, err
+		}
+
 		log.Printf("Block %s is an orphan, sending find_common_ancestor to: %s\n",
 			id, p.conn.RemoteAddr())
+
 		// send a find common ancestor request
 		if err := p.sendFindCommonAncestor(nil, false, outChan); err != nil {
 			return false, err
@@ -835,26 +863,75 @@ func (p *Peer) onBlock(block *Block, outChan chan<- Message) (bool, error) {
 		if err := p.processor.ProcessBlock(id, block, p.conn.RemoteAddr().String()); err != nil {
 			// disconnect a peer that sends us a bad block
 			p.conn.Close()
+			p.localInflightQueue.Remove(id, "")
+			p.globalInflightQueue.Remove(id, p.conn.RemoteAddr().String())
 			return false, err
 		}
 		// newly accepted block
 		accepted = true
+
+		// remove it only after we process it
+		p.localInflightQueue.Remove(id, "")
+		p.globalInflightQueue.Remove(id, p.conn.RemoteAddr().String())
 	}
 
-	log.Printf("Download queue size: %d, inflight queue size: %d\n",
-		len(p.blocksToDownloadQueue), len(p.blocksInflightQueue))
-
-	// dequeue another get_block request if needed
-	if len(p.blocksToDownloadQueue) == 0 {
-		return accepted, nil
+	// see if there are any more blocks to download right now
+	if err := p.processDownloadQueue(outChan); err != nil {
+		return false, err
 	}
 
-	p.blocksInflightQueue = append(p.blocksInflightQueue, p.blocksToDownloadQueue[0])
-	p.blocksToDownloadQueue = p.blocksToDownloadQueue[1:]
-	lastInflight := p.blocksInflightQueue[len(p.blocksInflightQueue)-1]
-	log.Printf("Sending get_block for %s, to: %s\n", lastInflight, p.conn.RemoteAddr())
-	outChan <- Message{Type: "get_block", Body: GetBlockMessage{BlockID: lastInflight}}
 	return accepted, nil
+}
+
+// Try requesting blocks that are in the download queue
+func (p *Peer) processDownloadQueue(outChan chan<- Message) error {
+	// fill up as much of the inflight queue as possible
+	var queued int
+	for p.localInflightQueue.Len() < inflightMax {
+		// next block to download
+		blockToDownload, ok := p.localDownloadQueue.PeekFront()
+		if !ok {
+			// no more blocks in the queue
+			break
+		}
+
+		// double-check if it's been processed since we last checked
+		branchType, err := p.ledger.GetBranchType(blockToDownload)
+		if err != nil {
+			return err
+		}
+		if branchType != UNKNOWN {
+			// it's been processed. remove it and check the next one
+			p.localDownloadQueue.Remove(blockToDownload, "")
+			continue
+		}
+
+		// add block to the client-wide queue with this peer as the owner
+		if p.globalInflightQueue.PushBack(blockToDownload, p.conn.RemoteAddr().String()) == false {
+			// another peer is downloading it right now.
+			// wait to see if they succeed before trying to download any others
+			break
+		}
+
+		// pop it off the local download queue
+		p.localDownloadQueue.Remove(blockToDownload, "")
+
+		// mark it inflight locally
+		p.localInflightQueue.PushBack(blockToDownload, "")
+		queued++
+
+		// request it
+		log.Printf("Sending get_block for %s, to: %s\n", blockToDownload, p.conn.RemoteAddr())
+		outChan <- Message{Type: "get_block", Body: GetBlockMessage{BlockID: blockToDownload}}
+	}
+
+	if queued > 0 {
+		log.Printf("Requested %d block(s) for download, from: %s", queued, p.conn.RemoteAddr())
+		log.Printf("Queue size: %d, peer inflight: %d, global inflight: %d, for: %s\n",
+			p.localDownloadQueue.Len(), p.localInflightQueue.Len(), p.globalInflightQueue.Len(), p.conn.RemoteAddr())
+	}
+
+	return nil
 }
 
 // Send a message to look for a common ancestor with a peer
@@ -945,7 +1022,7 @@ func (p *Peer) onFindCommonAncestor(id BlockID, index, length int, outChan chan<
 
 	var ids []BlockID
 	var height int64 = header.Height + 1
-	for len(ids) < 500 {
+	for len(ids) < maxBlocksPerInv {
 		nextID, err := p.ledger.GetBlockIDForHeight(height)
 		if err != nil {
 			return false, err

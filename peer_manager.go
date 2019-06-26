@@ -26,6 +26,7 @@ type PeerManager struct {
 	ledger          Ledger
 	processor       *Processor
 	txQueue         TransactionQueue
+	blockQueue      *BlockDownloadQueue
 	dataDir         string
 	myIP            string
 	peer            string
@@ -82,6 +83,7 @@ func NewPeerManager(
 		ledger:          ledger,
 		processor:       processor,
 		txQueue:         txQueue,
+		blockQueue:      NewBlockDownloadQueue(),
 		dataDir:         dataDir,
 		myIP:            myExternalIP, // set if upnp was enabled and successful
 		peer:            peer,
@@ -292,8 +294,10 @@ func (p *PeerManager) connectToPeers() error {
 
 	var want int
 	if ibd {
-		// only connect to 3 peers until we're synced
-		want = 3
+		// only connect to 1 peer until we're synced.
+		// if this client is a bad actor we'll find out about the real
+		// chain as soon as we think we're done with them and find more peers
+		want = 1
 	} else {
 		// otherwise try to keep us maximally connected
 		want = MAX_OUTBOUND_PEER_CONNECTIONS
@@ -348,7 +352,7 @@ func (p *PeerManager) connectToPeers() error {
 
 // Connect to a peer
 func (p *PeerManager) connect(addr string) error {
-	peer := NewPeer(nil, p.genesisID, p.peerStore, p.blockStore, p.ledger, p.processor, p.txQueue, p.addrChan)
+	peer := NewPeer(nil, p.genesisID, p.peerStore, p.blockStore, p.ledger, p.processor, p.txQueue, p.blockQueue, p.addrChan)
 
 	if ok := p.addToOutboundSet(addr, peer); !ok {
 		return fmt.Errorf("Too many peer connections")
@@ -456,7 +460,7 @@ func (p *PeerManager) acceptConnections() {
 			return
 		}
 
-		peer := NewPeer(conn, p.genesisID, p.peerStore, p.blockStore, p.ledger, p.processor, p.txQueue, p.addrChan)
+		peer := NewPeer(conn, p.genesisID, p.peerStore, p.blockStore, p.ledger, p.processor, p.txQueue, p.blockQueue, p.addrChan)
 
 		if ok := p.addToInboundSet(r.RemoteAddr, peer); !ok {
 			// TODO: tell the peer why
