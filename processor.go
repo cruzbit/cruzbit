@@ -116,7 +116,7 @@ func (p *Processor) run() {
 			}
 			after := time.Now().UnixNano()
 
-			log.Printf("Processing took %d ms, %d transaction(s), queue length: %d\n",
+			log.Printf("Processing took %d ms, %d transaction(s), transaction queue length: %d\n",
 				(after-before)/int64(time.Millisecond),
 				len(blockToProcess.block.Transactions),
 				p.txQueue.Len())

@@ -149,7 +149,7 @@ const (
 	inflightMax = 8
 
 	// Maximum local download queue size
-	downloadQueueMax = maxBlocksPerInv * 2
+	downloadQueueMax = maxBlocksPerInv * 10
 )
 
 // Run executes the peer's main loop in its own goroutine.
@@ -164,8 +164,19 @@ func (p *Peer) run() {
 	if p.closeHandler != nil {
 		defer p.closeHandler()
 	}
-	defer p.conn.Close()
+
 	peerAddr := p.conn.RemoteAddr().String()
+	defer func() {
+		// remove any inflight blocks this peer is no longer going to download
+		blockInflight, ok := p.localInflightQueue.PeekFront()
+		for ok {
+			p.localInflightQueue.Remove(blockInflight, "")
+			p.globalInflightQueue.Remove(blockInflight, peerAddr)
+			blockInflight, ok = p.localInflightQueue.PeekFront()
+		}
+	}()
+
+	defer p.conn.Close()
 
 	// written to by the reader loop to send outgoing messages to the writer loop
 	outChan := make(chan Message, 1)
@@ -702,14 +713,6 @@ func (p *Peer) run() {
 			log.Printf("Received close message from: %s\n", p.conn.RemoteAddr())
 			break
 		}
-	}
-
-	// remove any inflight blocks this peer is no longer going to download
-	blockInflight, ok := p.localInflightQueue.PeekFront()
-	for ok {
-		p.localInflightQueue.Remove(blockInflight, "")
-		p.globalInflightQueue.Remove(blockInflight, peerAddr)
-		blockInflight, ok = p.localInflightQueue.PeekFront()
 	}
 }
 
