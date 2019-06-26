@@ -26,7 +26,7 @@ type PeerManager struct {
 	ledger          Ledger
 	processor       *Processor
 	txQueue         TransactionQueue
-	blockQueue      *BlockDownloadQueue
+	blockQueue      *BlockQueue
 	dataDir         string
 	myIP            string
 	peer            string
@@ -83,7 +83,7 @@ func NewPeerManager(
 		ledger:          ledger,
 		processor:       processor,
 		txQueue:         txQueue,
-		blockQueue:      NewBlockDownloadQueue(),
+		blockQueue:      NewBlockQueue(),
 		dataDir:         dataDir,
 		myIP:            myExternalIP, // set if upnp was enabled and successful
 		peer:            peer,

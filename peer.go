@@ -30,9 +30,9 @@ type Peer struct {
 	processor           *Processor
 	txQueue             TransactionQueue
 	outbound            bool
-	localDownloadQueue  *BlockDownloadQueue // peer-local download queue
-	localInflightQueue  *BlockDownloadQueue // peer-local inflight queue
-	globalInflightQueue *BlockDownloadQueue // global inflight queue
+	localDownloadQueue  *BlockQueue // peer-local download queue
+	localInflightQueue  *BlockQueue // peer-local inflight queue
+	globalInflightQueue *BlockQueue // global inflight queue
 	continuationBlockID BlockID
 	filter              *cuckoo.Filter
 	addrChan            chan<- string
@@ -51,7 +51,7 @@ var PeerUpgrader = websocket.Upgrader{
 // NewPeer returns a new instance of a peer.
 func NewPeer(conn *websocket.Conn, genesisID BlockID, peerStore PeerStorage,
 	blockStore BlockStorage, ledger Ledger, processor *Processor,
-	txQueue TransactionQueue, inflightQueue *BlockDownloadQueue, addrChan chan<- string) *Peer {
+	txQueue TransactionQueue, blockQueue *BlockQueue, addrChan chan<- string) *Peer {
 	peer := &Peer{
 		conn:                conn,
 		genesisID:           genesisID,
@@ -60,9 +60,9 @@ func NewPeer(conn *websocket.Conn, genesisID BlockID, peerStore PeerStorage,
 		ledger:              ledger,
 		processor:           processor,
 		txQueue:             txQueue,
-		localDownloadQueue:  NewBlockDownloadQueue(),
-		localInflightQueue:  NewBlockDownloadQueue(),
-		globalInflightQueue: inflightQueue,
+		localDownloadQueue:  NewBlockQueue(),
+		localInflightQueue:  NewBlockQueue(),
+		globalInflightQueue: blockQueue,
 		addrChan:            addrChan,
 	}
 	peer.updateReadLimit()
@@ -146,7 +146,7 @@ const (
 	maxBlocksPerInv = 500
 
 	// Maximum local inflight queue size
-	inflightMax = 8
+	inflightQueueMax = 8
 
 	// Maximum local download queue size
 	downloadQueueMax = maxBlocksPerInv * 10
@@ -890,7 +890,7 @@ func (p *Peer) onBlock(block *Block, outChan chan<- Message) (bool, error) {
 func (p *Peer) processDownloadQueue(outChan chan<- Message) error {
 	// fill up as much of the inflight queue as possible
 	var queued int
-	for p.localInflightQueue.Len() < inflightMax {
+	for p.localInflightQueue.Len() < inflightQueueMax {
 		// next block to download
 		blockToDownload, ok := p.localDownloadQueue.PeekFront()
 		if !ok {
