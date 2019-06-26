@@ -168,11 +168,11 @@ func (p *Peer) run() {
 	peerAddr := p.conn.RemoteAddr().String()
 	defer func() {
 		// remove any inflight blocks this peer is no longer going to download
-		blockInflight, ok := p.localInflightQueue.PeekFront()
+		blockInflight, ok := p.localInflightQueue.Peek()
 		for ok {
 			p.localInflightQueue.Remove(blockInflight, "")
 			p.globalInflightQueue.Remove(blockInflight, peerAddr)
-			blockInflight, ok = p.localInflightQueue.PeekFront()
+			blockInflight, ok = p.localInflightQueue.Peek()
 		}
 	}()
 
@@ -754,7 +754,7 @@ func (p *Peer) onInvBlock(id BlockID, index, length int, outChan chan<- Message)
 	}
 
 	// add block to this peer's download queue
-	p.localDownloadQueue.PushBack(id, "")
+	p.localDownloadQueue.Add(id, "")
 
 	// process the download queue
 	return p.processDownloadQueue(outChan)
@@ -835,7 +835,7 @@ func (p *Peer) onBlock(block *Block, outChan chan<- Message) (bool, error) {
 
 	log.Printf("Received block: %s, from: %s\n", id, p.conn.RemoteAddr())
 
-	blockInFlight, ok := p.localInflightQueue.PeekFront()
+	blockInFlight, ok := p.localInflightQueue.Peek()
 	if !ok || blockInFlight != id {
 		// disconnect misbehaving peer
 		p.conn.Close()
@@ -873,7 +873,7 @@ func (p *Peer) onBlock(block *Block, outChan chan<- Message) (bool, error) {
 		// newly accepted block
 		accepted = true
 
-		// remove it only after we process it
+		// remove it from the inflight queues only after we process it
 		p.localInflightQueue.Remove(id, "")
 		p.globalInflightQueue.Remove(id, p.conn.RemoteAddr().String())
 	}
@@ -892,7 +892,7 @@ func (p *Peer) processDownloadQueue(outChan chan<- Message) error {
 	var queued int
 	for p.localInflightQueue.Len() < inflightQueueMax {
 		// next block to download
-		blockToDownload, ok := p.localDownloadQueue.PeekFront()
+		blockToDownload, ok := p.localDownloadQueue.Peek()
 		if !ok {
 			// no more blocks in the queue
 			break
@@ -905,14 +905,17 @@ func (p *Peer) processDownloadQueue(outChan chan<- Message) error {
 		}
 		if branchType != UNKNOWN {
 			// it's been processed. remove it and check the next one
+			log.Printf("Block %s has been processed, removing from download queue for: %s\n",
+				blockToDownload, p.conn.RemoteAddr().String())
 			p.localDownloadQueue.Remove(blockToDownload, "")
 			continue
 		}
 
-		// add block to the client-wide queue with this peer as the owner
-		if p.globalInflightQueue.PushBack(blockToDownload, p.conn.RemoteAddr().String()) == false {
+		// add block to the global inflight queue with this peer as the owner
+		if p.globalInflightQueue.Add(blockToDownload, p.conn.RemoteAddr().String()) == false {
 			// another peer is downloading it right now.
 			// wait to see if they succeed before trying to download any others
+			log.Printf("Block %s is being downloaded already from another peer\n", blockToDownload)
 			break
 		}
 
@@ -920,7 +923,7 @@ func (p *Peer) processDownloadQueue(outChan chan<- Message) error {
 		p.localDownloadQueue.Remove(blockToDownload, "")
 
 		// mark it inflight locally
-		p.localInflightQueue.PushBack(blockToDownload, "")
+		p.localInflightQueue.Add(blockToDownload, "")
 		queued++
 
 		// request it

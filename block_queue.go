@@ -16,8 +16,7 @@ type BlockQueue struct {
 	lock       sync.RWMutex
 }
 
-// If a block has been in the queue for more than 2 minutes it can be re-added with a new peer
-// responsible for its download.
+// If a block has been in the queue for more than 2 minutes it can be re-added with a new peer responsible for its download.
 const maxQueueWait = 2 * time.Minute
 
 type blockQueueEntry struct {
@@ -34,9 +33,9 @@ func NewBlockQueue() *BlockQueue {
 	}
 }
 
-// PushBack adds the block ID to the back of the queue and records the address of the peer who pushed it if it didn't exist in the queue.
+// Add adds the block ID to the back of the queue and records the address of the peer who pushed it if it didn't exist in the queue.
 // If it did exist and maxQueueWait has elapsed, the block is left in its position but the peer responsible for download is updated.
-func (b *BlockQueue) PushBack(id BlockID, who string) bool {
+func (b *BlockQueue) Add(id BlockID, who string) bool {
 	b.lock.Lock()
 	defer b.lock.Unlock()
 	if e, ok := b.blockMap[id]; ok {
@@ -82,8 +81,8 @@ func (b *BlockQueue) Exists(id BlockID) bool {
 	return ok
 }
 
-// PeekFront returns the ID of the block at the front of the queue.
-func (b *BlockQueue) PeekFront() (BlockID, bool) {
+// Peek returns the ID of the block at the front of the queue.
+func (b *BlockQueue) Peek() (BlockID, bool) {
 	b.lock.RLock()
 	defer b.lock.RUnlock()
 	if b.blockQueue.Len() == 0 {
