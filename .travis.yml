@@ -1,13 +1,13 @@
 language: go
 go:
   - 1.12.x
+env:
+  - GO111MODULE=on
 os:
   - linux	
   - osx
   - windows
-dist: trusty
-sudo: false
 install: true
 script:	
-  - env GO111MODULE=on go build
-  - env GO111MODULE=on go test
+  - go test -v -mod=vendor ./...
+  - go install -mod=vendor ./...
