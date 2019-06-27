@@ -1,4 +1,4 @@
-# cruzbit
+# cruzbit [![Build Status](https://travis-ci.org/cruzbit/cruzbit.svg?branch=master)](https://travis-ci.org/cruzbit/cruzbit)
 A simple decentralized peer-to-peer ledger implementation
 
 cruzbit is very similar to [bitcoin](https://www.bitcoin.com/bitcoin.pdf) with the following notable differences:
