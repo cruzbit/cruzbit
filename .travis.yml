@@ -1,6 +1,6 @@
 language: go
 go:
-  - master
+  - 1.12.x
 os:
   - linux	
   - osx
