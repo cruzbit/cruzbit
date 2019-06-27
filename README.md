@@ -42,4 +42,5 @@ Note that you can run the [client](https://github.com/cruzbit/cruzbit/tree/maste
 
 ## Discussion
 
-There is a subreddit for discussing issues and answering any questions you may have. Please feel free to ask anything in [r/cruzbit](https://www.reddit.com/r/cruzbit/) on Reddit.
+* **[Discord server](https://discord.gg/MRrEHYw)** for general chat as well as updates, including development status.
+* **[Reddit subreddit](https://www.reddit.com/r/cruzbit/)** for long-form discussion threads and Q&A.
