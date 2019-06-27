@@ -9,5 +9,5 @@ os:
   - windows
 install: true
 script:	
-  - go test -v -mod=vendor ./...
+  - go test -v -mod=vendor
   - go install -mod=vendor ./...
