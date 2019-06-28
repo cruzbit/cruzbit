@@ -119,13 +119,18 @@ func main() {
 	}
 
 	var miners []*Miner
+	var hashrateMonitor *HashrateMonitor
 	if *numMinersPtr > 0 {
+		hashUpdateChan := make(chan int64)
 		// create and run miners
 		for i := 0; i < *numMinersPtr; i++ {
-			miner := NewMiner(pubKeys, *memoPtr, blockStore, txQueue, ledger, processor, i)
+			miner := NewMiner(pubKeys, *memoPtr, blockStore, txQueue, ledger, processor, hashUpdateChan, i)
 			miners = append(miners, miner)
 			miner.Run()
 		}
+		// print hashrate updates
+		hashrateMonitor = NewHashrateMonitor(hashUpdateChan)
+		hashrateMonitor.Run()
 	} else {
 		log.Println("Mining is currently disabled")
 	}
@@ -183,6 +188,9 @@ func main() {
 		}
 		for _, miner := range miners {
 			miner.Shutdown()
+		}
+		if hashrateMonitor != nil {
+			hashrateMonitor.Shutdown()
 		}
 		processor.Shutdown()
 

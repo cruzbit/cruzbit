@@ -15,32 +15,49 @@ import (
 
 // Miner tries to mine a new tip block.
 type Miner struct {
-	pubKeys      []ed25519.PublicKey // receipients of any block rewards we mine
-	memo         string              // memo for coinbase of any blocks we mine
-	blockStore   BlockStorage
-	txQueue      TransactionQueue
-	ledger       Ledger
-	processor    *Processor
-	num          int
-	keyIndex     int
-	shutdownChan chan struct{}
-	wg           sync.WaitGroup
+	pubKeys        []ed25519.PublicKey // receipients of any block rewards we mine
+	memo           string              // memo for coinbase of any blocks we mine
+	blockStore     BlockStorage
+	txQueue        TransactionQueue
+	ledger         Ledger
+	processor      *Processor
+	num            int
+	keyIndex       int
+	hashUpdateChan chan int64
+	shutdownChan   chan struct{}
+	wg             sync.WaitGroup
+}
+
+type HashrateMonitor struct {
+	hashUpdateChan chan int64
+	shutdownChan   chan struct{}
+	wg             sync.WaitGroup
 }
 
 // NewMiner returns a new Miner instance.
 func NewMiner(pubKeys []ed25519.PublicKey, memo string,
 	blockStore BlockStorage, txQueue TransactionQueue,
-	ledger Ledger, processor *Processor, num int) *Miner {
+	ledger Ledger, processor *Processor,
+	hashUpdateChan chan int64, num int) *Miner {
 	return &Miner{
-		pubKeys:      pubKeys,
-		memo:         memo,
-		blockStore:   blockStore,
-		txQueue:      txQueue,
-		ledger:       ledger,
-		processor:    processor,
-		num:          num,
-		keyIndex:     rand.Intn(len(pubKeys)),
-		shutdownChan: make(chan struct{}),
+		pubKeys:        pubKeys,
+		memo:           memo,
+		blockStore:     blockStore,
+		txQueue:        txQueue,
+		ledger:         ledger,
+		processor:      processor,
+		num:            num,
+		keyIndex:       rand.Intn(len(pubKeys)),
+		hashUpdateChan: hashUpdateChan,
+		shutdownChan:   make(chan struct{}),
+	}
+}
+
+// NewHashrateMonitor returns a new HashrateMonitor instance.
+func NewHashrateMonitor(hashUpdateChan chan int64) *HashrateMonitor {
+	return &HashrateMonitor{
+		hashUpdateChan: hashUpdateChan,
+		shutdownChan:   make(chan struct{}),
 	}
 }
 
@@ -64,6 +81,7 @@ func (m *Miner) run() {
 	ticker := time.NewTicker(30 * time.Second)
 	defer ticker.Stop()
 
+	var hashes int64
 	var block *Block
 	var targetInt *big.Int
 	for {
@@ -114,6 +132,10 @@ func (m *Miner) run() {
 			}
 
 		case <-ticker.C:
+			// update hashcount for hashrate monitor
+			m.hashUpdateChan <- hashes
+			hashes = 0
+
 			if block != nil {
 				// update block time every so often
 				block.Header.Time = time.Now().Unix()
@@ -150,6 +172,7 @@ func (m *Miner) run() {
 				m.keyIndex = rand.Intn(len(m.pubKeys))
 			} else {
 				// no solution yet
+				hashes++
 				block.Header.Nonce += 1
 				if block.Header.Nonce > MAX_NUMBER {
 					block.Header.Nonce = 0
@@ -201,4 +224,42 @@ func (m *Miner) createNextBlock(tipID BlockID, tipHeader *BlockHeader) (*Block, 
 		return nil, err
 	}
 	return block, nil
+}
+
+// Run executes the hashrate monitor's main loop in its own goroutine.
+func (h *HashrateMonitor) Run() {
+	h.wg.Add(1)
+	go h.run()
+}
+
+func (h *HashrateMonitor) run() {
+	defer h.wg.Done()
+
+	var totalHashes int64
+	updateInterval := time.Second * 60
+	ticker := time.NewTicker(updateInterval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case _, ok := <-h.shutdownChan:
+			if !ok {
+				log.Println("Hashrate monitor shutting down...")
+				return
+			}
+		case hashes := <-h.hashUpdateChan:
+			totalHashes += hashes
+		case <-ticker.C:
+			hps := float64(totalHashes) / updateInterval.Seconds()
+			totalHashes = 0
+			log.Printf("Hashrate: %.3f MH/s", hps/1000/1000)
+		}
+	}
+}
+
+// Shutdown stops the hashrate monitor synchronously.
+func (h *HashrateMonitor) Shutdown() {
+	close(h.shutdownChan)
+	h.wg.Wait()
+	log.Println("Hashrate monitor shutdown")
 }
