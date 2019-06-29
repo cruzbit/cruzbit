@@ -61,11 +61,16 @@ func (m *Miner) run() {
 	m.processor.RegisterForNewTransactions(newTxChan)
 	defer m.processor.UnregisterForNewTransactions(newTxChan)
 
-	ticker := time.NewTicker(30 * time.Second)
-	defer ticker.Stop()
+	ticker30s := time.NewTicker(30 * time.Second)
+	defer ticker30s.Stop()
+
+	ticker5m := time.NewTicker(5 * time.Minute)
+	defer ticker5m.Stop()
 
 	var block *Block
 	var targetInt *big.Int
+	var numHashes int64
+	var now, lastTime time.Time
 	for {
 		select {
 		case tip := <-tipChangeChan:
@@ -84,7 +89,10 @@ func (m *Miner) run() {
 				// ledger state is broken
 				panic(err)
 			}
+
 			targetInt = block.Header.Target.GetBigInt()
+			lastTime = time.Now()
+			numHashes = 0
 
 		case newTx := <-newTxChan:
 			log.Printf("Miner %d received notice of new transaction %s\n", m.num, newTx.TransactionID)
@@ -113,7 +121,14 @@ func (m *Miner) run() {
 				return
 			}
 
-		case <-ticker.C:
+		case <-ticker5m.C:
+			now = time.Now()
+			log.Printf("Miner %d current hash rate is %.2f Mhash/s\n",
+				m.num, (float64(numHashes)/now.Sub(lastTime).Seconds())/1000000.0)
+			lastTime = now
+			numHashes = 0
+
+		case <-ticker30s.C:
 			if block != nil {
 				// update block time every so often
 				block.Header.Time = time.Now().Unix()
@@ -131,10 +146,14 @@ func (m *Miner) run() {
 				if err != nil {
 					panic(err)
 				}
+
 				targetInt = block.Header.Target.GetBigInt()
+				lastTime = time.Now()
+				numHashes = 0
 			}
 
 			// hash the block and check the proof-of-work
+			numHashes++
 			idInt := block.Header.IDFast()
 			if idInt.Cmp(targetInt) <= 0 {
 				// found a solution
