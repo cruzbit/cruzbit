@@ -579,7 +579,7 @@ func promptForPassphrase() string {
 		}
 		passphrase = string(ppBytes)
 	}
-	fmt.Println("\n")
+	fmt.Printf("\n\n")
 	return passphrase
 }
 

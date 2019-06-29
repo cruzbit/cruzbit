@@ -83,7 +83,7 @@ func (w *Wallet) SetPassphrase(passphrase string) (bool, error) {
 }
 
 // NewKeys generates, encrypts and stores new private keys and returns the public keys.
-func (w Wallet) NewKeys(count int) ([]ed25519.PublicKey, error) {
+func (w *Wallet) NewKeys(count int) ([]ed25519.PublicKey, error) {
 	pubKeys := make([]ed25519.PublicKey, count)
 	batch := new(leveldb.Batch)
 
@@ -128,7 +128,7 @@ func (w Wallet) NewKeys(count int) ([]ed25519.PublicKey, error) {
 }
 
 // GetKeys returns all of the public keys from the database.
-func (w Wallet) GetKeys() ([]ed25519.PublicKey, error) {
+func (w *Wallet) GetKeys() ([]ed25519.PublicKey, error) {
 	privKeyDbKey, err := encodePrivateKeyDbKey(nil)
 	if err != nil {
 		return nil, err
