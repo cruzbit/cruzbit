@@ -71,17 +71,50 @@ func (m *Miner) Run() {
 func (m *Miner) run() {
 	defer m.wg.Done()
 
+	ticker := time.NewTicker(30 * time.Second)
+	defer ticker.Stop()
+
+	// don't start mining until we think we're synced.
+	// we're just wasting time and slowing down the sync otherwise
+	ibd, _, err := IsInitialBlockDownload(m.ledger, m.blockStore)
+	if err != nil {
+		panic(err)
+	}
+	if ibd {
+		log.Printf("Miner %d waiting for blockchain sync\n", m.num)
+	ready:
+		for {
+			select {
+			case _, ok := <-m.shutdownChan:
+				if !ok {
+					log.Printf("Miner %d shutting down...\n", m.num)
+					return
+				}
+			case <-ticker.C:
+				var err error
+				ibd, _, err = IsInitialBlockDownload(m.ledger, m.blockStore)
+				if err != nil {
+					panic(err)
+				}
+				if ibd == false {
+					// time to start mining
+					break ready
+				}
+			}
+		}
+	}
+
+	// register for tip changes
 	tipChangeChan := make(chan TipChange, 1)
 	m.processor.RegisterForTipChange(tipChangeChan)
 	defer m.processor.UnregisterForTipChange(tipChangeChan)
 
+	// register for new transactions
 	newTxChan := make(chan NewTx, 1)
 	m.processor.RegisterForNewTransactions(newTxChan)
 	defer m.processor.UnregisterForNewTransactions(newTxChan)
 
-	ticker := time.NewTicker(30 * time.Second)
-	defer ticker.Stop()
-
+	// main mining loop
 	var hashes int64
 	var block *Block
 	var targetInt *big.Int
