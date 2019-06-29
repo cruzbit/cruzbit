@@ -121,7 +121,7 @@ func main() {
 	var miners []*Miner
 	var hashrateMonitor *HashrateMonitor
 	if *numMinersPtr > 0 {
-		hashUpdateChan := make(chan int64)
+		hashUpdateChan := make(chan int64, *numMinersPtr)
 		// create and run miners
 		for i := 0; i < *numMinersPtr; i++ {
 			miner := NewMiner(pubKeys, *memoPtr, blockStore, txQueue, ledger, processor, hashUpdateChan, i)

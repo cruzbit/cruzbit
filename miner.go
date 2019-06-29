@@ -28,6 +28,7 @@ type Miner struct {
 	wg             sync.WaitGroup
 }
 
+// HashrateMonitor collects hash counts from all miners in order to monitor and display the aggregate hashrate.
 type HashrateMonitor struct {
 	hashUpdateChan chan int64
 	shutdownChan   chan struct{}
@@ -157,6 +158,7 @@ func (m *Miner) run() {
 			}
 
 			// hash the block and check the proof-of-work
+			hashes++
 			idInt := block.Header.IDFast()
 			if idInt.Cmp(targetInt) <= 0 {
 				// found a solution
@@ -172,7 +174,6 @@ func (m *Miner) run() {
 				m.keyIndex = rand.Intn(len(m.pubKeys))
 			} else {
 				// no solution yet
-				hashes++
 				block.Header.Nonce += 1
 				if block.Header.Nonce > MAX_NUMBER {
 					block.Header.Nonce = 0
@@ -236,7 +237,7 @@ func (h *HashrateMonitor) run() {
 	defer h.wg.Done()
 
 	var totalHashes int64
-	updateInterval := time.Second * 60
+	updateInterval := 5 * time.Minute
 	ticker := time.NewTicker(updateInterval)
 	defer ticker.Stop()
 
@@ -252,7 +253,7 @@ func (h *HashrateMonitor) run() {
 		case <-ticker.C:
 			hps := float64(totalHashes) / updateInterval.Seconds()
 			totalHashes = 0
-			log.Printf("Hashrate: %.3f MH/s", hps/1000/1000)
+			log.Printf("Hashrate: %.2f MH/s", hps/1000/1000)
 		}
 	}
 }
