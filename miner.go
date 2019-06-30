@@ -115,7 +115,7 @@ func (m *Miner) run() {
 	defer m.processor.UnregisterForNewTransactions(newTxChan)
 
 	// main mining loop
-	var hashes int64
+	var hashes, medianTimestamp int64
 	var block *Block
 	var targetInt *big.Int
 	for {
@@ -136,6 +136,15 @@ func (m *Miner) run() {
 				// ledger state is broken
 				panic(err)
 			}
+			// make sure we're at least +1 the median timestamp
+			medianTimestamp, err = computeMedianTimestamp(tip.Block.Header, m.blockStore)
+			if err != nil {
+				panic(err)
+			}
+			if block.Header.Time <= medianTimestamp {
+				block.Header.Time = medianTimestamp + 1
+			}
+			// convert our target to a big.Int
 			targetInt = block.Header.Target.GetBigInt()
 
 		case newTx := <-newTxChan:
@@ -172,7 +181,12 @@ func (m *Miner) run() {
 
 			if block != nil {
 				// update block time every so often
-				block.Header.Time = time.Now().Unix()
+				now := time.Now().Unix()
+				if now > medianTimestamp {
+					block.Header.Time = now
+				} else {
+					block.Header.Time += 30
+				}
 			}
 
 		default:
@@ -187,6 +201,15 @@ func (m *Miner) run() {
 				if err != nil {
 					panic(err)
 				}
+				// make sure we're at least +1 the median timestamp
+				medianTimestamp, err = computeMedianTimestamp(tipHeader, m.blockStore)
+				if err != nil {
+					panic(err)
+				}
+				if block.Header.Time <= medianTimestamp {
+					block.Header.Time = medianTimestamp + 1
+				}
+				// convert our target to a big.Int
 				targetInt = block.Header.Target.GetBigInt()
 			}
 

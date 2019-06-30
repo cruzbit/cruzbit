@@ -592,7 +592,7 @@ func (p *Processor) acceptBlock(id BlockID, block *Block, now int64, source stri
 	}
 
 	// check that the timestamp isn't too far in the past
-	medianTimestamp, err := p.computeMedianTimestamp(prevHeader)
+	medianTimestamp, err := computeMedianTimestamp(prevHeader, p.blockStore)
 	if err != nil {
 		return err
 	}
@@ -733,12 +733,12 @@ func computeTarget(prevHeader *BlockHeader, blockStore BlockStorage) (BlockID, e
 }
 
 // Compute the median timestamp of the last NUM_BLOCKS_FOR_MEDIAN_TIMESTAMP blocks
-func (p *Processor) computeMedianTimestamp(prevHeader *BlockHeader) (int64, error) {
+func computeMedianTimestamp(prevHeader *BlockHeader, blockStore BlockStorage) (int64, error) {
 	var timestamps []int64
 	var err error
 	for i := 0; i < NUM_BLOCKS_FOR_MEDIAN_TMESTAMP; i++ {
 		timestamps = append(timestamps, prevHeader.Time)
-		prevHeader, _, err = p.blockStore.GetBlockHeader(prevHeader.Previous)
+		prevHeader, _, err = blockStore.GetBlockHeader(prevHeader.Previous)
 		if err != nil {
 			return 0, err
 		}
