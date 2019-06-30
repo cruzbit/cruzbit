@@ -4,6 +4,7 @@
 package cruzbit
 
 import (
+	"context"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -70,7 +71,7 @@ func NewPeer(conn *websocket.Conn, genesisID BlockID, peerStore PeerStorage,
 }
 
 // Connect connects outbound to a peer.
-func (p *Peer) Connect(addr, nonce, myAddr string) error {
+func (p *Peer) Connect(ctx context.Context, addr, nonce, myAddr string) error {
 	u := url.URL{Scheme: "wss", Host: addr, Path: "/" + p.genesisID.String()}
 	log.Printf("Connecting to %s", u.String())
 
@@ -87,7 +88,12 @@ func (p *Peer) Connect(addr, nonce, myAddr string) error {
 		header.Add("Cruzbit-Peer-Address", myAddr)
 	}
 
-	conn, resp, err := dialer.Dial(u.String(), header)
+	// specify timeout via context. if the parent context is cancelled
+	// we'll also abort the connection.
+	dialCtx, cancel := context.WithTimeout(ctx, connectWait)
+	defer cancel()
+
+	conn, resp, err := dialer.DialContext(dialCtx, u.String(), header)
 	if err != nil {
 		if resp != nil && resp.StatusCode == http.StatusTooManyRequests {
 			// the peer is already connected to us inbound.
@@ -124,6 +130,9 @@ func (p *Peer) Shutdown() {
 }
 
 const (
+	// Time allowed to wait for WebSocket connection
+	connectWait = 10 * time.Second
+
 	// Time allowed to write a message to the peer
 	writeWait = 30 * time.Second
 

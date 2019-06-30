@@ -43,6 +43,7 @@ type PeerManager struct {
 	open            bool
 	privateIPBlocks []*net.IPNet
 	server          *http.Server
+	cancelFunc      context.CancelFunc
 	shutdownChan    chan bool
 	wg              sync.WaitGroup
 }
@@ -167,8 +168,12 @@ func (p *PeerManager) run() {
 	// handle listening for inbound peers
 	p.listenForPeers()
 
+	// parent context for all peer connection requests
+	ctx, cancel := context.WithCancel(context.Background())
+	p.cancelFunc = cancel
+
 	// try connecting to some saved peers
-	p.connectToPeers()
+	p.connectToPeers(ctx)
 
 	// try connecting out to peers every 5 minutes
 	ticker := time.NewTicker(5 * time.Minute)
@@ -198,7 +203,7 @@ func (p *PeerManager) run() {
 			log.Printf("Discovered new peer: %s\n", resolvedAddr)
 
 			// try connecting to some saved peers
-			p.connectToPeers()
+			p.connectToPeers(ctx)
 
 		case <-ticker.C:
 			outCount, inCount := p.outboundPeerCount(), p.inboundPeerCount()
@@ -209,7 +214,7 @@ func (p *PeerManager) run() {
 			p.listenForPeers()
 
 			// periodically try connecting to some saved peers
-			p.connectToPeers()
+			p.connectToPeers(ctx)
 
 		case _, ok := <-p.shutdownChan:
 			if !ok {
@@ -230,6 +235,11 @@ func (p *PeerManager) run() {
 
 // Shutdown stops the peer manager synchronously.
 func (p *PeerManager) Shutdown() {
+	if p.cancelFunc != nil {
+		// cancel any connection requests in progress
+		p.cancelFunc()
+	}
+	// shutdown the main loop
 	close(p.shutdownChan)
 	p.wg.Wait()
 
@@ -269,7 +279,7 @@ func (p *PeerManager) outboundPeerCount() int {
 }
 
 // Try connecting to some recent peers
-func (p *PeerManager) connectToPeers() error {
+func (p *PeerManager) connectToPeers(ctx context.Context) error {
 	if len(p.peer) != 0 {
 		if p.outboundPeerCount() != 0 {
 			// only connect to the explicitly requested peer once
@@ -278,7 +288,7 @@ func (p *PeerManager) connectToPeers() error {
 
 		// try reconnecting to the explicit peer
 		log.Printf("Attempting to connect to: %s\n", p.peer)
-		if err := p.connect(p.peer); err != nil {
+		if err := p.connect(ctx, p.peer); err != nil {
 			log.Printf("Error connecting to peer: %s\n", p.peer)
 			return err
 		}
@@ -336,8 +346,12 @@ func (p *PeerManager) connectToPeers() error {
 			}
 			tried[addr] = true
 			log.Printf("Attempting to connect to: %s\n", addr)
-			if err := p.connect(addr); err != nil {
+			if err := p.connect(ctx, addr); err != nil {
 				log.Printf("Error connecting to peer: %s\n", err)
+				if ctx.Err() != nil {
+					// quit trying connections if the parent context was cancelled
+					return ctx.Err()
+				}
 			} else {
 				log.Printf("Connected to peer: %s\n", addr)
 			}
@@ -351,7 +365,7 @@ func (p *PeerManager) connectToPeers() error {
 }
 
 // Connect to a peer
-func (p *PeerManager) connect(addr string) error {
+func (p *PeerManager) connect(ctx context.Context, addr string) error {
 	peer := NewPeer(nil, p.genesisID, p.peerStore, p.blockStore, p.ledger, p.processor, p.txQueue, p.blockQueue, p.addrChan)
 
 	if ok := p.addToOutboundSet(addr, peer); !ok {
@@ -365,7 +379,7 @@ func (p *PeerManager) connect(addr string) error {
 	}
 
 	// connect to the peer
-	if err := peer.Connect(addr, p.peerNonce, myAddress); err != nil {
+	if err := peer.Connect(ctx, addr, p.peerNonce, myAddress); err != nil {
 		p.removeFromOutboundSet(addr)
 		return err
 	}
