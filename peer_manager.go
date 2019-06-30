@@ -14,6 +14,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/GeertJohan/go.rice"
 	"github.com/glendc/go-external-ip"
 )
 
@@ -554,6 +555,9 @@ func (p *PeerManager) acceptConnections() {
 
 	// listen for websocket requests using the genesis block ID as the handler pattern
 	http.HandleFunc("/"+p.genesisID.String(), peerHandler)
+
+	// serve a status page
+	http.Handle("/", http.FileServer(rice.MustFindBox("html").HTTPBox()))
 
 	log.Println("Listening for new peer connections")
 	if err := p.server.ListenAndServeTLS(certPath, keyPath); err != nil {

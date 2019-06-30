@@ -1,0 +1,24 @@
+<html>
+  <head>
+    <title>cruzbit</title>
+    <style>
+      body { white-space: pre; font-family: monospace; }
+    </style>
+  </head>
+  <body>
+    <h2>cruzbit</h2>
+    <div id="blocks"></div>
+    <div id="clock"></div>
+    <script src="status.js"></script>
+    <script>
+      var ws = new WebSocket("wss://" + location.host + "/" + genesisId, ["cruzbit.1"]);
+      ws.onopen = function() {
+          onOpen(ws);
+      };
+      ws.onmessage = function(event) {
+          onMessage(JSON.parse(event.data), ws);
+      };
+      setInterval(onTick, 1000);
+    </script>
+  </body>
+</html>
