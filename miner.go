@@ -184,8 +184,6 @@ func (m *Miner) run() {
 				now := time.Now().Unix()
 				if now > medianTimestamp {
 					block.Header.Time = now
-				} else {
-					block.Header.Time += 30
 				}
 			}
 
