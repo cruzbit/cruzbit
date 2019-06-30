@@ -8,6 +8,7 @@ os:
   - osx
   - windows
 install: true
-script:	
+script:
+  - go vet ./...
   - go test -v -mod=vendor
   - go install -mod=vendor ./...
