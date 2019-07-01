@@ -70,14 +70,19 @@ func NewPeer(conn *websocket.Conn, genesisID BlockID, peerStore PeerStorage,
 	return peer
 }
 
+// peerDialer is the websocket.Dialer to use for outbound peer connections
+var peerDialer *websocket.Dialer = &websocket.Dialer{
+	Proxy:            http.ProxyFromEnvironment,
+	HandshakeTimeout: 15 * time.Second,
+	Subprotocols:     []string{Protocol}, // set in protocol.go
+	TLSClientConfig:  tlsClientConfig,    // set in tls.go
+}
+
 // Connect connects outbound to a peer.
 func (p *Peer) Connect(ctx context.Context, addr, nonce, myAddr string) error {
 	u := url.URL{Scheme: "wss", Host: addr, Path: "/" + p.genesisID.String()}
 	log.Printf("Connecting to %s", u.String())
 
-	dialer := websocket.DefaultDialer
-	dialer.TLSClientConfig = tlsClientConfig // set in tls.go
-	dialer.Subprotocols = append(dialer.Subprotocols, Protocol)
 	if err := p.peerStore.OnConnectAttempt(addr); err != nil {
 		return err
 	}
@@ -93,7 +98,7 @@ func (p *Peer) Connect(ctx context.Context, addr, nonce, myAddr string) error {
 	dialCtx, cancel := context.WithTimeout(ctx, connectWait)
 	defer cancel()
 
-	conn, resp, err := dialer.DialContext(dialCtx, u.String(), header)
+	conn, resp, err := peerDialer.DialContext(dialCtx, u.String(), header)
 	if err != nil {
 		if resp != nil && resp.StatusCode == http.StatusTooManyRequests {
 			// the peer is already connected to us inbound.
