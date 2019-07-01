@@ -216,7 +216,7 @@ func (p *Peer) run() {
 		defer p.processor.UnregisterForTipChange(tipChangeChan)
 
 		// register to hear about new transactions
-		newTxChan := make(chan NewTx, MAX_TRANSACTION_QUEUE_LENGTH)
+		newTxChan := make(chan NewTx, MAX_TRANSACTIONS_TO_INCLUDE_PER_BLOCK)
 		p.processor.RegisterForNewTransactions(newTxChan)
 		defer p.processor.UnregisterForNewTransactions(newTxChan)
 
