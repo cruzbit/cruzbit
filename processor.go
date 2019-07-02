@@ -618,7 +618,7 @@ func (p *Processor) acceptBlock(id BlockID, block *Block, now int64, source stri
 				return fmt.Errorf("Transaction %s is expired", txID)
 			}
 			// if it's in the queue with the same signature we've verified it already
-			if !p.txQueue.Exists(txID, tx.Signature) {
+			if !p.txQueue.ExistsSigned(txID, tx.Signature) {
 				ok, err := tx.Verify()
 				if err != nil {
 					return err

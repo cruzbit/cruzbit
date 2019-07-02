@@ -1311,11 +1311,13 @@ func (p *Peer) onPushTransaction(tx *Transaction, outChan chan<- Message) error 
 
 	log.Printf("Received push_transaction: %s, from: %s\n", id, p.conn.RemoteAddr())
 
-	// process transaction
+	// process the transaction if this is the first time we've seen it
 	var errStr string
-	err = p.processor.ProcessTransaction(id, tx, p.conn.RemoteAddr().String())
-	if err != nil {
-		errStr = err.Error()
+	if !p.txQueue.Exists(id) {
+		err = p.processor.ProcessTransaction(id, tx, p.conn.RemoteAddr().String())
+		if err != nil {
+			errStr = err.Error()
+		}
 	}
 
 	outChan <- Message{Type: "push_transaction_result",
