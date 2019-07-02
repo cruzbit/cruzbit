@@ -5,7 +5,6 @@ package cruzbit
 
 import (
 	"context"
-	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -1108,8 +1107,7 @@ func (p *Peer) getBlockHeader(id BlockID, outChan chan<- Message) error {
 
 // Handle a request for a public key's balance
 func (p *Peer) onGetBalance(pubKey ed25519.PublicKey, outChan chan<- Message) error {
-	log.Printf("Received get_balance for %s, from: %s\n",
-		base64.StdEncoding.EncodeToString(pubKey[:]), p.conn.RemoteAddr())
+	log.Printf("Received get_balance from: %s\n", p.conn.RemoteAddr())
 
 	balances, tipID, tipHeight, err := p.ledger.GetPublicKeyBalances([]ed25519.PublicKey{pubKey})
 	if err != nil {
@@ -1167,9 +1165,7 @@ func (p *Peer) onGetBalances(pubKeys []ed25519.PublicKey, outChan chan<- Message
 // Handle a request for a public key's transactions over a given height range
 func (p *Peer) onGetPublicKeyTransactions(pubKey ed25519.PublicKey,
 	startHeight, endHeight int64, startIndex, limit int, outChan chan<- Message) error {
-	log.Printf("Received get_public_key_transactions for %s, start: %d[%d], end: %d, limit: %d, from: %s\n",
-		base64.StdEncoding.EncodeToString(pubKey[:]),
-		startHeight, startIndex, endHeight, limit, p.conn.RemoteAddr())
+	log.Printf("Received get_public_key_transactions from: %s\n", p.conn.RemoteAddr())
 
 	if limit < 0 {
 		outChan <- Message{Type: "public_key_transactions"}
