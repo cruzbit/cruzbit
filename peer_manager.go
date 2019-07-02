@@ -30,6 +30,8 @@ type PeerManager struct {
 	dataDir         string
 	myIP            string
 	peer            string
+	certPath        string
+	keyPath         string
 	port            int
 	accept          bool
 	accepting       bool
@@ -52,7 +54,7 @@ type PeerManager struct {
 func NewPeerManager(
 	genesisID BlockID, peerStore PeerStorage, blockStore BlockStorage,
 	ledger Ledger, processor *Processor, txQueue TransactionQueue,
-	dataDir, myExternalIP, peer string, port int, accept, irc bool) *PeerManager {
+	dataDir, myExternalIP, peer, certPath, keyPath string, port int, accept, irc bool) *PeerManager {
 
 	// compute and save these
 	var privateIPBlocks []*net.IPNet
@@ -88,6 +90,8 @@ func NewPeerManager(
 		dataDir:         dataDir,
 		myIP:            myExternalIP, // set if upnp was enabled and successful
 		peer:            peer,
+		certPath:        certPath,
+		keyPath:         keyPath,
 		port:            port,
 		accept:          accept,
 		irc:             irc,
@@ -490,12 +494,16 @@ func (p *PeerManager) acceptConnections() {
 		peer.Run()
 	}
 
-	// generate new certificate and key for tls on each run
-	log.Println("Generating TLS certificate and key")
-	certPath, keyPath, err := generateSelfSignedCertAndKey(p.dataDir)
-	if err != nil {
-		log.Println(err)
-		return
+	var certPath, keyPath string = p.certPath, p.keyPath
+	if len(certPath) == 0 {
+		// generate new certificate and key for tls on each run
+		log.Println("Generating TLS certificate and key")
+		var err error
+		certPath, keyPath, err = generateSelfSignedCertAndKey(p.dataDir)
+		if err != nil {
+			log.Println(err)
+			return
+		}
 	}
 
 	// listen for websocket requests using the genesis block ID as the handler pattern

@@ -38,10 +38,18 @@ func main() {
 	noAcceptPtr := flag.Bool("noaccept", false, "Disable inbound peer connections")
 	prunePtr := flag.Bool("prune", false, "Prune transaction and public key transaction indices")
 	keyFilePtr := flag.String("keyfile", "", "Path to a file containing public keys to use when mining")
+	tlsCertPtr := flag.String("tlscert", "", "Path to a file containing a PEM-encoded X.509 certificate to use with TLS")
+	tlsKeyPtr := flag.String("tlskey", "", "Path to a file containing a PEM-encoded EC key to use with TLS")
 	flag.Parse()
 
 	if len(*dataDirPtr) == 0 {
 		log.Fatal("-datadir argument required")
+	}
+	if len(*tlsCertPtr) != 0 && len(*tlsKeyPtr) == 0 {
+		log.Fatal("-tlskey argument missing")
+	}
+	if len(*tlsCertPtr) == 0 && len(*tlsKeyPtr) != 0 {
+		log.Fatal("-tlscert argument missing")
 	}
 
 	var pubKeys []ed25519.PublicKey
@@ -157,7 +165,7 @@ func main() {
 
 	// manage peer connections
 	peerManager := NewPeerManager(genesisID, peerStore, blockStore, ledger, processor, txQueue,
-		*dataDirPtr, myExternalIP, *peerPtr, *portPtr, !*noAcceptPtr, !*noIrcPtr)
+		*dataDirPtr, myExternalIP, *peerPtr, *tlsCertPtr, *tlsKeyPtr, *portPtr, !*noAcceptPtr, !*noIrcPtr)
 	peerManager.Run()
 
 	// shutdown on ctrl-c
