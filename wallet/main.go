@@ -33,6 +33,7 @@ func main() {
 	DefaultPeer := "127.0.0.1:" + strconv.Itoa(DEFAULT_CRUZBIT_PORT)
 	peerPtr := flag.String("peer", DefaultPeer, "Address of a peer to connect to")
 	dbPathPtr := flag.String("walletdb", "", "Path to a wallet database (created if it doesn't exist)")
+	tlsVerifyPtr := flag.Bool("tlsverify", false, "Verify the TLS certificate of the peer is signed by a recognized CA and the host matches the CN")
 	flag.Parse()
 
 	if len(*dbPathPtr) == 0 {
@@ -79,7 +80,7 @@ func main() {
 		if wallet.IsConnected() {
 			return nil
 		}
-		if err := wallet.Connect(*peerPtr, genesisID); err != nil {
+		if err := wallet.Connect(*peerPtr, genesisID, *tlsVerifyPtr); err != nil {
 			return err
 		}
 		go wallet.Run()

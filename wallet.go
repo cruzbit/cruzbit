@@ -152,12 +152,11 @@ func (w *Wallet) GetKeys() ([]ed25519.PublicKey, error) {
 
 // Connect connects to a peer for transaction history, balance information, and sending new transactions.
 // The threat model assumes the peer the wallet is speaking to is not an adversary.
-func (w *Wallet) Connect(addr string, genesisID BlockID) error {
+func (w *Wallet) Connect(addr string, genesisID BlockID, tlsVerify bool) error {
 	u := url.URL{Scheme: "wss", Host: addr, Path: "/" + genesisID.String()}
-	dialer := websocket.DefaultDialer
-	dialer.TLSClientConfig = tlsClientConfig
-	dialer.Subprotocols = append(dialer.Subprotocols, Protocol)
-	conn, _, err := dialer.Dial(u.String(), nil)
+	// by default clients skip verification as most peers are using ephemeral certificates and keys.
+	peerDialer.TLSClientConfig.InsecureSkipVerify = !tlsVerify
+	conn, _, err := peerDialer.Dial(u.String(), nil)
 	if err != nil {
 		return err
 	}
