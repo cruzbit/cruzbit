@@ -174,8 +174,16 @@ func (t *TransactionQueueMemory) Get(limit int) []*Transaction {
 	return txs
 }
 
-// Exists returns true if the given transaction is in the queue and contains the given signature.
-func (t *TransactionQueueMemory) Exists(id TransactionID, signature Signature) bool {
+// Exists returns true if the given transaction is in the queue.
+func (t *TransactionQueueMemory) Exists(id TransactionID) bool {
+	t.lock.RLock()
+	defer t.lock.RUnlock()
+	_, ok := t.txMap[id]
+	return ok
+}
+
+// ExistsSigned returns true if the given transaction is in the queue and contains the given signature.
+func (t *TransactionQueueMemory) ExistsSigned(id TransactionID, signature Signature) bool {
 	t.lock.RLock()
 	defer t.lock.RUnlock()
 	if e, ok := t.txMap[id]; ok {

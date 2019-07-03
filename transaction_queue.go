@@ -20,8 +20,11 @@ type TransactionQueue interface {
 	// Get returns transactions in the queue for the miner.
 	Get(limit int) []*Transaction
 
-	// Exists returns true if the given transaction is in the queue and contains the given signature.
-	Exists(id TransactionID, signature Signature) bool
+	// Exists returns true if the given transaction is in the queue.
+	Exists(id TransactionID) bool
+
+	// ExistsSigned returns true if the given transaction is in the queue and contains the given signature.
+	ExistsSigned(id TransactionID, signature Signature) bool
 
 	// Len returns the queue length.
 	Len() int
