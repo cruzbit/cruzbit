@@ -33,6 +33,7 @@ type PeerManager struct {
 	certPath        string
 	keyPath         string
 	port            int
+	inboundLimit    int
 	accept          bool
 	accepting       bool
 	irc             bool
@@ -54,7 +55,8 @@ type PeerManager struct {
 func NewPeerManager(
 	genesisID BlockID, peerStore PeerStorage, blockStore BlockStorage,
 	ledger Ledger, processor *Processor, txQueue TransactionQueue,
-	dataDir, myExternalIP, peer, certPath, keyPath string, port int, accept, irc bool) *PeerManager {
+	dataDir, myExternalIP, peer, certPath, keyPath string,
+	port, inboundLimit int, accept, irc bool) *PeerManager {
 
 	// compute and save these
 	var privateIPBlocks []*net.IPNet
@@ -93,6 +95,7 @@ func NewPeerManager(
 		certPath:        certPath,
 		keyPath:         keyPath,
 		port:            port,
+		inboundLimit:    inboundLimit,
 		accept:          accept,
 		irc:             irc,
 		inPeers:         make(map[string]*Peer),
@@ -536,7 +539,7 @@ func (p *PeerManager) addToOutboundSet(addr string, peer *Peer) bool {
 func (p *PeerManager) addToInboundSet(addr string, peer *Peer) bool {
 	p.inPeersLock.Lock()
 	defer p.inPeersLock.Unlock()
-	if len(p.inPeers) == MAX_INBOUND_PEER_CONNECTIONS {
+	if len(p.inPeers) == p.inboundLimit {
 		// too many connections
 		return false
 	}
