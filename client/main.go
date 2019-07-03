@@ -39,7 +39,7 @@ func main() {
 	prunePtr := flag.Bool("prune", false, "Prune transaction and public key transaction indices")
 	keyFilePtr := flag.String("keyfile", "", "Path to a file containing public keys to use when mining")
 	tlsCertPtr := flag.String("tlscert", "", "Path to a file containing a PEM-encoded X.509 certificate to use with TLS")
-	tlsKeyPtr := flag.String("tlskey", "", "Path to a file containing a PEM-encoded EC key to use with TLS")
+	tlsKeyPtr := flag.String("tlskey", "", "Path to a file containing a PEM-encoded private key to use with TLS")
 	inLimitPtr := flag.Int("inlimit", MAX_INBOUND_PEER_CONNECTIONS, "Limit for the number of inbound peer connections.")
 	flag.Parse()
 
