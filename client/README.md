@@ -41,3 +41,4 @@ With the above specified options, the client will:
 - **prune** - If specified, only the last 2016 blocks (roughly 2 weeks) worth of transaction and public key transaction indices are stored in the ledger. This only impacts a wallet's ability to query for history older than that. It can still query for current balances of all public keys.
 - **tlscert** - Path to a file containing a PEM-encoded X.509 certificate to use with TLS.
 - **tlskey** - Path to a file containing a PEM-encoded private key to use with TLS.
+- **inlimit** - Limit for the number of inbound peer connections. Default is 128.
