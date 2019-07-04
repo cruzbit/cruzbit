@@ -11,6 +11,7 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"math"
 	"math/rand"
 	"os"
 	"strconv"
@@ -196,12 +197,12 @@ func main() {
 				break
 			}
 			for i, pubKey := range pubKeys {
-				fmt.Printf("%3d: %s\n",
+				fmt.Printf("%4d: %s\n",
 					i+1, base64.StdEncoding.EncodeToString(pubKey[:]))
 			}
 
 		case "genkeys":
-			count, err := promptForNumber("Count: ", bufio.NewReader(os.Stdin))
+			count, err := promptForNumber("Count", 4, bufio.NewReader(os.Stdin))
 			if err != nil {
 				fmt.Printf("Error: %s\n", err)
 				break
@@ -262,13 +263,15 @@ func main() {
 					fmt.Printf("Error: %s\n", err)
 					break
 				}
-				fmt.Printf("%3d: %s %10.4f\n",
+				amount := roundFloat(float64(balance), 8) / CRUZBITS_PER_CRUZ
+				fmt.Printf("%4d: %s %16.8f\n",
 					i+1,
 					base64.StdEncoding.EncodeToString(pubKey[:]),
-					float64(balance)/CRUZBITS_PER_CRUZ)
+					amount)
 				total += balance
 			}
-			fmt.Printf("%s: %.4f\n", aurora.Bold("Total"), float64(total)/CRUZBITS_PER_CRUZ)
+			amount := roundFloat(float64(total), 8) / CRUZBITS_PER_CRUZ
+			fmt.Printf("%s: %.8f\n", aurora.Bold("Total"), amount)
 
 		case "send":
 			if err := connectWallet(); err != nil {
@@ -287,7 +290,7 @@ func main() {
 				fmt.Printf("Error: %s\n", err)
 				break
 			}
-			txID, err := promptForTransactionID("ID: ", bufio.NewReader(os.Stdin))
+			txID, err := promptForTransactionID("ID", 2, bufio.NewReader(os.Stdin))
 			if err != nil {
 				fmt.Printf("Error: %s\n", err)
 				break
@@ -390,41 +393,41 @@ func sendTransaction(wallet *Wallet) (TransactionID, error) {
 	reader := bufio.NewReader(os.Stdin)
 
 	// prompt for from
-	from, err := promptForPublicKey("  From: ", reader)
+	from, err := promptForPublicKey("From", 6, reader)
 	if err != nil {
 		return TransactionID{}, err
 	}
 
 	// prompt for to
-	to, err := promptForPublicKey("    To: ", reader)
+	to, err := promptForPublicKey("To", 6, reader)
 	if err != nil {
 		return TransactionID{}, err
 	}
 
 	// prompt for amount
-	amount, err := promptForValue("Amount: ", reader)
+	amount, err := promptForValue("Amount", 6, reader)
 	if err != nil {
 		return TransactionID{}, err
 	}
 	if amount < minAmount {
 		return TransactionID{}, fmt.Errorf(
-			"The peer's minimum amount to relay transactions is %.4f",
-			float64(minAmount)/CRUZBITS_PER_CRUZ)
+			"The peer's minimum amount to relay transactions is %.8f",
+			roundFloat(float64(minAmount), 8)/CRUZBITS_PER_CRUZ)
 	}
 
 	// prompt for fee
-	fee, err := promptForValue("   Fee: ", reader)
+	fee, err := promptForValue("Fee", 6, reader)
 	if err != nil {
 		return TransactionID{}, err
 	}
 	if fee < minFee {
 		return TransactionID{}, fmt.Errorf(
-			"The peer's minimum required fee to relay transactions is %.4f",
-			float64(minFee)/CRUZBITS_PER_CRUZ)
+			"The peer's minimum required fee to relay transactions is %.8f",
+			roundFloat(float64(minFee), 8)/CRUZBITS_PER_CRUZ)
 	}
 
 	// prompt for memo
-	fmt.Print(aurora.Bold("  Memo: "))
+	fmt.Printf("%6v: ", aurora.Bold("Memo"))
 	text, err := reader.ReadString('\n')
 	if err != nil {
 		return TransactionID{}, err
@@ -443,8 +446,8 @@ func sendTransaction(wallet *Wallet) (TransactionID, error) {
 	return id, nil
 }
 
-func promptForPublicKey(prompt string, reader *bufio.Reader) (ed25519.PublicKey, error) {
-	fmt.Print(aurora.Bold(prompt))
+func promptForPublicKey(prompt string, rightJustify int, reader *bufio.Reader) (ed25519.PublicKey, error) {
+	fmt.Printf("%"+strconv.Itoa(rightJustify)+"v: ", aurora.Bold(prompt))
 	text, err := reader.ReadString('\n')
 	if err != nil {
 		return nil, err
@@ -460,8 +463,8 @@ func promptForPublicKey(prompt string, reader *bufio.Reader) (ed25519.PublicKey,
 	return ed25519.PublicKey(pubKeyBytes), nil
 }
 
-func promptForValue(prompt string, reader *bufio.Reader) (int64, error) {
-	fmt.Print(aurora.Bold(prompt))
+func promptForValue(prompt string, rightJustify int, reader *bufio.Reader) (int64, error) {
+	fmt.Printf("%"+strconv.Itoa(rightJustify)+"v: ", aurora.Bold(prompt))
 	text, err := reader.ReadString('\n')
 	if err != nil {
 		return 0, err
@@ -474,11 +477,12 @@ func promptForValue(prompt string, reader *bufio.Reader) (int64, error) {
 	if err != nil {
 		return 0, fmt.Errorf("Invalid value")
 	}
-	return int64(value * CRUZBITS_PER_CRUZ), nil
+	valueInt := int64(roundFloat(value, 8) * CRUZBITS_PER_CRUZ)
+	return valueInt, nil
 }
 
-func promptForNumber(prompt string, reader *bufio.Reader) (int, error) {
-	fmt.Print(aurora.Bold(prompt))
+func promptForNumber(prompt string, rightJustify int, reader *bufio.Reader) (int, error) {
+	fmt.Printf("%"+strconv.Itoa(rightJustify)+"v: ", aurora.Bold(prompt))
 	text, err := reader.ReadString('\n')
 	if err != nil {
 		return 0, err
@@ -486,8 +490,8 @@ func promptForNumber(prompt string, reader *bufio.Reader) (int, error) {
 	return strconv.Atoi(strings.TrimSpace(text))
 }
 
-func promptForTransactionID(prompt string, reader *bufio.Reader) (TransactionID, error) {
-	fmt.Print(aurora.Bold(prompt))
+func promptForTransactionID(prompt string, rightJustify int, reader *bufio.Reader) (TransactionID, error) {
+	fmt.Printf("%"+strconv.Itoa(rightJustify)+"v: ", aurora.Bold(prompt))
 	text, err := reader.ReadString('\n')
 	if err != nil {
 		return TransactionID{}, err
@@ -511,35 +515,35 @@ func promptForTransactionID(prompt string, reader *bufio.Reader) (TransactionID,
 func showTransaction(w *Wallet, tx *Transaction, height int64) {
 	when := time.Unix(tx.Time, 0)
 	id, _ := tx.ID()
-	fmt.Printf("     %s: %s\n", aurora.Bold("ID"), id)
-	fmt.Printf(" %s: %d\n", aurora.Bold("Series"), tx.Series)
-	fmt.Printf("   %s: %s\n", aurora.Bold("Time"), when)
+	fmt.Printf("%7v: %s\n", aurora.Bold("ID"), id)
+	fmt.Printf("%7v: %d\n", aurora.Bold("Series"), tx.Series)
+	fmt.Printf("%7v: %s\n", aurora.Bold("Time"), when)
 	if tx.From != nil {
-		fmt.Printf("   %s: %s\n", aurora.Bold("From"), base64.StdEncoding.EncodeToString(tx.From))
+		fmt.Printf("%7v: %s\n", aurora.Bold("From"), base64.StdEncoding.EncodeToString(tx.From))
 	}
-	fmt.Printf("     %s: %s\n", aurora.Bold("To"), base64.StdEncoding.EncodeToString(tx.To))
-	fmt.Printf(" %s: %.4f\n", aurora.Bold("Amount"), float64(tx.Amount)/CRUZBITS_PER_CRUZ)
+	fmt.Printf("%7v: %s\n", aurora.Bold("To"), base64.StdEncoding.EncodeToString(tx.To))
+	fmt.Printf("%7v: %.8f\n", aurora.Bold("Amount"), roundFloat(float64(tx.Amount), 8)/CRUZBITS_PER_CRUZ)
 	if tx.Fee > 0 {
-		fmt.Printf("    %s: %.4f\n", aurora.Bold("Fee"), float64(tx.Fee)/CRUZBITS_PER_CRUZ)
+		fmt.Printf("%7v: %.8f\n", aurora.Bold("Fee"), roundFloat(float64(tx.Fee), 8)/CRUZBITS_PER_CRUZ)
 	}
 	if len(tx.Memo) > 0 {
-		fmt.Printf("   %s: %s\n", aurora.Bold("Memo"), tx.Memo)
+		fmt.Printf("%7v: %s\n", aurora.Bold("Memo"), tx.Memo)
 	}
 
 	_, header, _ := w.GetTipHeader()
 	if height <= 0 {
 		if tx.Matures > 0 {
-			fmt.Printf("%s: cannot be mined until height: %d, current height: %d\n",
+			fmt.Printf("%7v: cannot be mined until height: %d, current height: %d\n",
 				aurora.Bold("Matures"), tx.Matures, header.Height)
 		}
 		if tx.Expires > 0 {
-			fmt.Printf("%s: cannot be mined after height: %d, current height: %d\n",
+			fmt.Printf("%7v: cannot be mined after height: %d, current height: %d\n",
 				aurora.Bold("Expires"), tx.Expires, header.Height)
 		}
 		return
 	}
 
-	fmt.Printf(" %s: confirmed at height %d, %d confirmation(s)\n",
+	fmt.Printf("%7v: confirmed at height %d, %d confirmation(s)\n",
 		aurora.Bold("Status"), height, (header.Height-height)+1)
 }
 
@@ -587,4 +591,25 @@ func promptForPassphrase() string {
 type transactionWithHeight struct {
 	tx     *Transaction
 	height int64
+}
+
+// From: https://groups.google.com/forum/#!topic/golang-nuts/ITZV08gAugI
+func roundFloat(x float64, prec int) float64 {
+	var rounder float64
+	pow := math.Pow(10, float64(prec))
+	intermed := x * pow
+	_, frac := math.Modf(intermed)
+	intermed += .5
+	x = .5
+	if frac < 0.0 {
+		x = -.5
+		intermed -= 1
+	}
+	if frac >= x {
+		rounder = math.Ceil(intermed)
+	} else {
+		rounder = math.Floor(intermed)
+	}
+
+	return rounder / pow
 }
