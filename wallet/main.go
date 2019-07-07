@@ -162,6 +162,7 @@ func main() {
 			{Text: "clearnew", Description: "Clear all pending incoming transaction notifications"},
 			{Text: "conf", Description: "Show new transaction confirmations"},
 			{Text: "clearconf", Description: "Clear all pending transaction confirmation notifications"},
+			{Text: "rewards", Description: "Show immature block rewards for all public keys"},
 			{Text: "quit", Description: "Quit this wallet session"},
 		}
 		return prompt.FilterHasPrefix(s, d.GetWordBeforeCursor(), true)
@@ -372,6 +373,58 @@ func main() {
 				defer newConfsLock.Unlock()
 				newConfs = nil
 			}()
+
+		case "rewards":
+			if err := connectWallet(); err != nil {
+				fmt.Printf("Error: %s\n", err)
+				break
+			}
+			pubKeys, err := wallet.GetKeys()
+			if err != nil {
+				fmt.Printf("Error: %s\n", err)
+				break
+			}
+			_, tipHeader, err := wallet.GetTipHeader()
+			if err != nil {
+				fmt.Printf("Error: %s\n", err)
+				break
+			}
+			var total int64
+			lastHeight := tipHeader.Height - COINBASE_MATURITY
+		gpkt:
+			for i, pubKey := range pubKeys {
+				var rewards, startHeight int64 = 0, lastHeight + 1
+				var startIndex int = 0
+				for {
+					_, stopHeight, stopIndex, fbs, err := wallet.GetPublicKeyTransactions(
+						pubKey, startHeight, tipHeader.Height+1, startIndex, 32)
+					if err != nil {
+						fmt.Printf("Error: %s\n", err)
+						break gpkt
+					}
+					var numTx int
+					startHeight, startIndex = stopHeight, stopIndex+1
+					for _, fb := range fbs {
+						for _, tx := range fb.Transactions {
+							numTx++
+							if tx.IsCoinbase() {
+								rewards += tx.Amount
+							}
+						}
+					}
+					if numTx < 32 {
+						break
+					}
+				}
+				amount := roundFloat(float64(rewards), 8) / CRUZBITS_PER_CRUZ
+				fmt.Printf("%4d: %s %16.8f\n",
+					i+1,
+					base64.StdEncoding.EncodeToString(pubKey[:]),
+					amount)
+				total += rewards
+			}
+			amount := roundFloat(float64(total), 8) / CRUZBITS_PER_CRUZ
+			fmt.Printf("%s: %.8f\n", aurora.Bold("Total"), amount)
 
 		case "quit":
 			wallet.Shutdown()
