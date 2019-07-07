@@ -119,6 +119,10 @@ func (p *PeerManager) Run() {
 func (p *PeerManager) run() {
 	defer p.wg.Done()
 
+	// parent context for all peer connection requests
+	ctx, cancel := context.WithCancel(context.Background())
+	p.cancelFunc = cancel
+
 	// determine external ip
 	myExternalIP, err := determineExternalIP()
 	if err != nil {
@@ -173,11 +177,7 @@ func (p *PeerManager) run() {
 	}
 
 	// handle listening for inbound peers
-	p.listenForPeers()
-
-	// parent context for all peer connection requests
-	ctx, cancel := context.WithCancel(context.Background())
-	p.cancelFunc = cancel
+	p.listenForPeers(ctx)
 
 	// try connecting to some saved peers
 	p.connectToPeers(ctx)
@@ -218,7 +218,7 @@ func (p *PeerManager) run() {
 				outCount, inCount)
 
 			// handle listening for inbound peers
-			p.listenForPeers()
+			p.listenForPeers(ctx)
 
 			// periodically try connecting to some saved peers
 			p.connectToPeers(ctx)
@@ -400,7 +400,7 @@ func (p *PeerManager) connect(ctx context.Context, addr string) error {
 }
 
 // Check to see if it's time to start accepting connections and do so if necessary
-func (p *PeerManager) listenForPeers() bool {
+func (p *PeerManager) listenForPeers(ctx context.Context) bool {
 	if p.accept == false {
 		return false
 	}
@@ -427,7 +427,12 @@ func (p *PeerManager) listenForPeers() bool {
 
 	// give us some time to generate a certificate and start listening
 	// so we can correctly report connectivity to outbound peers
-	time.Sleep(5 * time.Second)
+	select {
+	case <-time.After(5 * time.Second):
+		break
+	case <-ctx.Done():
+		break
+	}
 	return true
 }
 
