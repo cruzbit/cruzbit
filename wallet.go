@@ -342,6 +342,32 @@ func (w *Wallet) GetTransaction(id TransactionID) (*Transaction, *BlockID, int64
 	return t.Transaction, t.BlockID, t.Height, nil
 }
 
+// GetPublicKeyTransactions retrieves information about historic transactions involving the given public key.
+func (w *Wallet) GetPublicKeyTransactions(
+	pubKey ed25519.PublicKey, startHeight, endHeight int64, startIndex, limit int) (
+	startH, stopH int64, stopIndex int, fb []*FilterBlockMessage, err error) {
+	gpkt := GetPublicKeyTransactionsMessage{
+		PublicKey:   pubKey,
+		StartHeight: startHeight,
+		StartIndex:  startIndex,
+		EndHeight:   endHeight,
+		Limit:       limit,
+	}
+	w.outChan <- Message{Type: "get_public_key_transactions", Body: gpkt}
+	result := <-w.resultChan
+	if len(result.err) != 0 {
+		return 0, 0, 0, nil, fmt.Errorf("%s", result.err)
+	}
+	pkt := new(PublicKeyTransactionsMessage)
+	if err := json.Unmarshal(result.message, pkt); err != nil {
+		return 0, 0, 0, nil, err
+	}
+	if len(pkt.Error) != 0 {
+		return 0, 0, 0, nil, fmt.Errorf("%s", pkt.Error)
+	}
+	return pkt.StartHeight, pkt.StopHeight, pkt.StopIndex, pkt.FilterBlocks, nil
+}
+
 // Used to hold the result of synchronous requests
 type walletResult struct {
 	err     string
@@ -411,6 +437,9 @@ func (w *Wallet) run() {
 				w.resultChan <- walletResult{message: body}
 
 			case "transaction":
+				w.resultChan <- walletResult{message: body}
+
+			case "public_key_transactions":
 				w.resultChan <- walletResult{message: body}
 
 			case "filter_result":
