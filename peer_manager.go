@@ -37,6 +37,7 @@ type PeerManager struct {
 	accept          bool
 	accepting       bool
 	irc             bool
+	dnsseed         bool
 	inPeers         map[string]*Peer
 	outPeers        map[string]*Peer
 	inPeersLock     sync.RWMutex
@@ -56,7 +57,7 @@ func NewPeerManager(
 	genesisID BlockID, peerStore PeerStorage, blockStore BlockStorage,
 	ledger Ledger, processor *Processor, txQueue TransactionQueue,
 	dataDir, myExternalIP, peer, certPath, keyPath string,
-	port, inboundLimit int, accept, irc bool) *PeerManager {
+	port, inboundLimit int, accept, irc, dnsseed bool) *PeerManager {
 
 	// compute and save these
 	var privateIPBlocks []*net.IPNet
@@ -98,6 +99,7 @@ func NewPeerManager(
 		inboundLimit:    inboundLimit,
 		accept:          accept,
 		irc:             irc,
+		dnsseed:         dnsseed,
 		inPeers:         make(map[string]*Peer),
 		outPeers:        make(map[string]*Peer),
 		addrChan:        make(chan string, 10000),
@@ -219,6 +221,11 @@ func (p *PeerManager) run() {
 
 			// handle listening for inbound peers
 			p.listenForPeers(ctx)
+
+			if p.dnsseed && rand.Intn(2) == 1 {
+				// drop a peer so we can try another
+				p.dropRandomPeer()
+			}
 
 			// periodically try connecting to some saved peers
 			p.connectToPeers(ctx)
@@ -579,6 +586,21 @@ func (p *PeerManager) removeFromInboundSet(addr string) {
 	defer p.inPeersLock.Unlock()
 	delete(p.inPeers, addr)
 	log.Printf("Inbound peer count: %d\n", len(p.inPeers))
+}
+
+// Drop a random peer. Used by seeders
+func (p *PeerManager) dropRandomPeer() {
+	var peers []*Peer
+	func() {
+		p.outPeersLock.RLock()
+		defer p.outPeersLock.RUnlock()
+		for _, peer := range p.outPeers {
+			peers = append(peers, peer)
+		}
+	}()
+	peer := peers[rand.Intn(len(peers))]
+	log.Printf("Dropping random peer: %s\n", peer.conn.RemoteAddr())
+	peer.Shutdown()
 }
 
 // Parse, resolve and validate peer addreses
