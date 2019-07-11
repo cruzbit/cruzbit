@@ -38,8 +38,14 @@ type Wallet struct {
 }
 
 // NewWallet returns a new Wallet instance.
-func NewWallet(walletDbPath string) (*Wallet, error) {
-	db, err := leveldb.OpenFile(walletDbPath, nil)
+func NewWallet(walletDbPath string, recover bool) (*Wallet, error) {
+	var err error
+	var db *leveldb.DB
+	if recover {
+		db, err = leveldb.RecoverFile(walletDbPath, nil)
+	} else {
+		db, err = leveldb.OpenFile(walletDbPath, nil)
+	}
 	if err != nil {
 		return nil, err
 	}
