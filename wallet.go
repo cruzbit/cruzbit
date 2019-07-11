@@ -374,6 +374,32 @@ func (w *Wallet) GetPublicKeyTransactions(
 	return pkt.StartHeight, pkt.StopHeight, pkt.StopIndex, pkt.FilterBlocks, nil
 }
 
+// VerifyKey verifies that the private key associated with the given public key is intact in the database.
+func (w *Wallet) VerifyKey(pubKey ed25519.PublicKey) error {
+	// fetch the private key
+	privKeyDbKey, err := encodePrivateKeyDbKey(pubKey)
+	if err != nil {
+		return err
+	}
+	encryptedPrivKey, err := w.db.Get(privKeyDbKey, nil)
+	if err != nil {
+		return err
+	}
+
+	// decrypt it
+	privKey, ok := decryptPrivateKey(encryptedPrivKey, w.passphrase)
+	if !ok {
+		return fmt.Errorf("Unable to decrypt private key")
+	}
+
+	// check to make sure it can be used to derive the same public key
+	pubKeyDerived := privKey.Public().(ed25519.PublicKey)
+	if !bytes.Equal(pubKeyDerived, pubKey) {
+		return fmt.Errorf("Private key cannot be used to derive the same public key. Possibly corrupt.")
+	}
+	return nil
+}
+
 // Used to hold the result of synchronous requests
 type walletResult struct {
 	err     string
