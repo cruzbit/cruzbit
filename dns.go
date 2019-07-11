@@ -36,8 +36,8 @@ func (d *DNSSeeder) handleQuery(m *dns.Msg, externalIP string) {
 	for _, q := range m.Question {
 		switch q.Qtype {
 		case dns.TypeA:
-			// get up to 32 peers that we've connected to in the last 48 hours
-			addresses, err := d.peerStore.GetSince(32, time.Now().Unix()-(60*60*48))
+			// get up to 128 peers that we've connected to in the last 48 hours
+			addresses, err := d.peerStore.GetSince(128, time.Now().Unix()-(60*60*48))
 			if err != nil {
 				log.Printf("Error requesting peers from storage: %s\n", err)
 				return

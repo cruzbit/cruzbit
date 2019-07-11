@@ -9,6 +9,7 @@ import (
 	"encoding/gob"
 	"fmt"
 	"math"
+	"math/rand"
 	"sync"
 	"time"
 
@@ -46,7 +47,9 @@ func (p *PeerStorageDisk) Store(addr string) (bool, error) {
 		return false, nil
 	}
 
-	info := peerInfo{FirstSeen: time.Now().Unix()}
+	// insert new peers at the head of the list to try next but put them in a random position
+	// relative to other new peers
+	info := peerInfo{FirstSeen: time.Now().Unix(), LastAttempt: rand.Int63n(1 << 30)}
 	batch := new(leveldb.Batch)
 	if err := info.writeToBatch(addr, batch); err != nil {
 		return false, err
@@ -352,7 +355,7 @@ type peerInfo struct {
 
 // Should we retry this connection?
 func (p peerInfo) shouldRetry() bool {
-	if p.LastAttempt == 0 {
+	if p.LastAttempt < 1<<30 {
 		// never been tried
 		return true
 	}

@@ -22,24 +22,25 @@ import (
 // Peer is a peer client in the network. They all speak WebSocket protocol to each other.
 // Peers could be fully validating and mining nodes or simply wallets.
 type Peer struct {
-	conn                *websocket.Conn
-	genesisID           BlockID
-	peerStore           PeerStorage
-	blockStore          BlockStorage
-	ledger              Ledger
-	processor           *Processor
-	txQueue             TransactionQueue
-	outbound            bool
-	localDownloadQueue  *BlockQueue // peer-local download queue
-	localInflightQueue  *BlockQueue // peer-local inflight queue
-	globalInflightQueue *BlockQueue // global inflight queue
-	continuationBlockID BlockID
-	filter              *cuckoo.Filter
-	addrChan            chan<- string
-	readLimitLock       sync.RWMutex
-	readLimit           int64
-	closeHandler        func()
-	wg                  sync.WaitGroup
+	conn                          *websocket.Conn
+	genesisID                     BlockID
+	peerStore                     PeerStorage
+	blockStore                    BlockStorage
+	ledger                        Ledger
+	processor                     *Processor
+	txQueue                       TransactionQueue
+	outbound                      bool
+	localDownloadQueue            *BlockQueue // peer-local download queue
+	localInflightQueue            *BlockQueue // peer-local inflight queue
+	globalInflightQueue           *BlockQueue // global inflight queue
+	continuationBlockID           BlockID
+	lastPeerAddressesReceivedTime time.Time
+	filter                        *cuckoo.Filter
+	addrChan                      chan<- string
+	readLimitLock                 sync.RWMutex
+	readLimit                     int64
+	closeHandler                  func()
+	wg                            sync.WaitGroup
 }
 
 // PeerUpgrader upgrades the incoming HTTP connection to a WebSocket if the subprotocol matches.
@@ -1445,6 +1446,13 @@ func (p *Peer) onGetPeerAddresses(outChan chan<- Message) error {
 func (p *Peer) onPeerAddresses(addresses []string) {
 	log.Printf("Received peer_addresses message with %d address(es), from: %s\n",
 		len(addresses), p.conn.RemoteAddr())
+
+	if time.Since(p.lastPeerAddressesReceivedTime) < getPeerAddressesPeriod {
+		// don't let a peer flood us with peer addresses
+		log.Println("Ignoring peer addresses")
+		return
+	}
+	p.lastPeerAddressesReceivedTime = time.Now()
 
 	limit := 32
 	for i, addr := range addresses {

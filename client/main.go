@@ -167,7 +167,7 @@ func main() {
 	// manage peer connections
 	peerManager := NewPeerManager(genesisID, peerStore, blockStore, ledger, processor, txQueue,
 		*dataDirPtr, myExternalIP, *peerPtr, *tlsCertPtr, *tlsKeyPtr,
-		*portPtr, *inLimitPtr, !*noAcceptPtr, !*noIrcPtr)
+		*portPtr, *inLimitPtr, !*noAcceptPtr, !*noIrcPtr, *dnsSeedPtr)
 	peerManager.Run()
 
 	// shutdown on ctrl-c
