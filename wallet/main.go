@@ -168,6 +168,7 @@ func main() {
 			{Text: "conf", Description: "Show new transaction confirmations"},
 			{Text: "clearconf", Description: "Clear all pending transaction confirmation notifications"},
 			{Text: "rewards", Description: "Show immature block rewards for all public keys"},
+			{Text: "verify", Description: "Verify the private key is decryptable and intact for all public keys displayed with 'listkeys'"},
 			{Text: "quit", Description: "Quit this wallet session"},
 		}
 		return prompt.FilterHasPrefix(s, d.GetWordBeforeCursor(), true)
@@ -430,6 +431,29 @@ func main() {
 			}
 			amount := roundFloat(float64(total), 8) / CRUZBITS_PER_CRUZ
 			fmt.Printf("%s: %.8f\n", aurora.Bold("Total"), amount)
+
+		case "verify":
+			pubKeys, err := wallet.GetKeys()
+			if err != nil {
+				fmt.Printf("Error: %s\n", err)
+				break
+			}
+			var verified, corrupt int
+			for i, pubKey := range pubKeys {
+				if err := wallet.VerifyKey(pubKey); err != nil {
+					corrupt++
+					fmt.Printf("%4d: %s %s\n",
+						i+1, base64.StdEncoding.EncodeToString(pubKey[:]),
+						aurora.Bold(aurora.Red(err.Error())))
+				} else {
+					verified++
+					fmt.Printf("%4d: %s %s\n",
+						i+1, base64.StdEncoding.EncodeToString(pubKey[:]),
+						aurora.Bold(aurora.Green("Verified")))
+				}
+			}
+			fmt.Printf("%d key(s) verified and %d key(s) potentially corrupt\n",
+				verified, corrupt)
 
 		case "quit":
 			wallet.Shutdown()
