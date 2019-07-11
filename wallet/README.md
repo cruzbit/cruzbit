@@ -20,6 +20,7 @@ The `wallet` application is now in `$HOME/go/bin/wallet`.
 
 - **peer** - Specifies the address of a peer to talk to for balance and transaction history information. It will also publish newly signed transactions to this peer. By default, it connects to `127.0.0.1:8831`.
 - **tlsverify** - Verify the TLS certificate of the peer is signed by a recognized CA and the host matches the CN. This is recommended if you're connecting to your client peer node over the open Internet. Your client will need to use the `-tlscert` and `-tlskey` options with a certificate signed by a recognized CA.
+- **recover** - Attempt to recover a corrupt `-walletdb` directory.
 
 ## Usage
 

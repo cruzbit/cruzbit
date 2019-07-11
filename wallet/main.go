@@ -35,6 +35,7 @@ func main() {
 	peerPtr := flag.String("peer", DefaultPeer, "Address of a peer to connect to")
 	dbPathPtr := flag.String("walletdb", "", "Path to a wallet database (created if it doesn't exist)")
 	tlsVerifyPtr := flag.Bool("tlsverify", false, "Verify the TLS certificate of the peer is signed by a recognized CA and the host matches the CN")
+	recoverPtr := flag.Bool("recover", false, "Attempt to recover a corrupt walletdb")
 	flag.Parse()
 
 	if len(*dbPathPtr) == 0 {
@@ -57,8 +58,12 @@ func main() {
 	fmt.Println("Starting up...")
 	fmt.Printf("Genesis block ID: %s\n", genesisID)
 
+	if *recoverPtr {
+		fmt.Println("Attempting to recover wallet...")
+	}
+
 	// instantiate wallet
-	wallet, err := NewWallet(*dbPathPtr)
+	wallet, err := NewWallet(*dbPathPtr, *recoverPtr)
 	if err != nil {
 		log.Fatal(err)
 	}
