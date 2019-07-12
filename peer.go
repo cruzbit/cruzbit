@@ -1447,9 +1447,10 @@ func (p *Peer) onPeerAddresses(addresses []string) {
 	log.Printf("Received peer_addresses message with %d address(es), from: %s\n",
 		len(addresses), p.conn.RemoteAddr())
 
-	if time.Since(p.lastPeerAddressesReceivedTime) < getPeerAddressesPeriod {
+	if time.Since(p.lastPeerAddressesReceivedTime) < (getPeerAddressesPeriod - 2*time.Minute) {
 		// don't let a peer flood us with peer addresses
-		log.Println("Ignoring peer addresses")
+		log.Printf("Ignoring peer addresses, time since last addresses: %v\n",
+			time.Now().Sub(p.lastPeerAddressesReceivedTime))
 		return
 	}
 	p.lastPeerAddressesReceivedTime = time.Now()
