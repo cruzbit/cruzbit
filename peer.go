@@ -35,6 +35,7 @@ type Peer struct {
 	globalInflightQueue           *BlockQueue // global inflight queue
 	continuationBlockID           BlockID
 	lastPeerAddressesReceivedTime time.Time
+	filterLock                    sync.RWMutex
 	filter                        *cuckoo.Filter
 	addrChan                      chan<- string
 	readLimitLock                 sync.RWMutex
@@ -198,11 +199,6 @@ func (p *Peer) run() {
 	// signals that the reader loop is exiting
 	defer close(outChan)
 
-	// written to by the reader loop to request changes to the filter
-	filterLoadChan := make(chan *cuckoo.Filter, 1)
-	filterAddChan := make(chan []ed25519.PublicKey, 1)
-	filterTxQueueChan := make(chan bool, 1)
-
 	// send a find common ancestor request and request peer addresses shortly after connecting
 	onConnectChan := make(chan bool, 1)
 	go func() {
@@ -315,8 +311,12 @@ func (p *Peer) run() {
 					break
 				}
 
-				if !p.filterLookup(newTx.Transaction) {
-					// peer doesn't care
+				interested := func() bool {
+					p.filterLock.RLock()
+					defer p.filterLock.RUnlock()
+					return p.filterLookup(newTx.Transaction)
+				}()
+				if !interested {
 					continue
 				}
 
@@ -346,66 +346,6 @@ func (p *Peer) run() {
 				p.conn.SetWriteDeadline(time.Now().Add(writeWait))
 				if err := p.conn.WriteJSON(m); err != nil {
 					log.Printf("Error sending get_peer_addresses: %s, to: %s\n", err, p.conn.RemoteAddr())
-					p.conn.Close()
-				}
-
-			case filter := <-filterLoadChan:
-				// set the filter
-				p.filter = filter
-
-				// send the result
-				result := Message{Type: "filter_result"}
-				p.conn.SetWriteDeadline(time.Now().Add(writeWait))
-				if err := p.conn.WriteJSON(result); err != nil {
-					log.Printf("Write error: %s, to: %s\n", err, p.conn.RemoteAddr())
-					p.conn.Close()
-				}
-
-			case pubKeys := <-filterAddChan:
-				// set the filter if it's not set
-				if p.filter == nil {
-					p.filter = cuckoo.NewFilter(1 << 16)
-				}
-
-				// perform the inserts
-				var err error
-				for _, pubKey := range pubKeys {
-					if !p.filter.Insert(pubKey[:]) {
-						err = fmt.Errorf("Unable to insert into filter")
-						break
-					}
-				}
-
-				// send the result
-				var m Message
-				if err != nil {
-					m = Message{Type: "filter_result", Body: FilterResultMessage{Error: err.Error()}}
-				} else {
-					m = Message{Type: "filter_result"}
-				}
-				p.conn.SetWriteDeadline(time.Now().Add(writeWait))
-				if err := p.conn.WriteJSON(m); err != nil {
-					log.Printf("Write error: %s, to: %s\n", err, p.conn.RemoteAddr())
-					p.conn.Close()
-				}
-
-			case <-filterTxQueueChan:
-				ftq := FilterTransactionQueueMessage{}
-				if p.filter != nil {
-					transactions := p.txQueue.Get(0)
-					for _, tx := range transactions {
-						if p.filterLookup(tx) {
-							ftq.Transactions = append(ftq.Transactions, tx)
-						}
-					}
-				} else {
-					ftq.Error = "No filter set"
-				}
-
-				m := Message{Type: "filter_transaction_queue", Body: ftq}
-				p.conn.SetWriteDeadline(time.Now().Add(writeWait))
-				if err := p.conn.WriteJSON(m); err != nil {
-					log.Printf("Write error: %s, to: %s\n", err, p.conn.RemoteAddr())
 					p.conn.Close()
 				}
 
@@ -677,7 +617,7 @@ func (p *Peer) run() {
 					log.Printf("Error: %s, from: %s\n", err, p.conn.RemoteAddr())
 					return
 				}
-				if err := p.onFilterLoad(fl.Type, fl.Filter, filterLoadChan, outChan); err != nil {
+				if err := p.onFilterLoad(fl.Type, fl.Filter, outChan); err != nil {
 					log.Printf("Error: %s, from: %s\n", err, p.conn.RemoteAddr())
 					break
 				}
@@ -688,13 +628,13 @@ func (p *Peer) run() {
 					log.Printf("Error: %s, from: %s\n", err, p.conn.RemoteAddr())
 					return
 				}
-				if err := p.onFilterAdd(fa.PublicKeys, filterAddChan, outChan); err != nil {
+				if err := p.onFilterAdd(fa.PublicKeys, outChan); err != nil {
 					log.Printf("Error: %s, from: %s\n", err, p.conn.RemoteAddr())
 					break
 				}
 
 			case "get_filter_transaction_queue":
-				p.onGetFilterTransactionQueue(filterTxQueueChan)
+				p.onGetFilterTransactionQueue(outChan)
 
 			case "get_peer_addresses":
 				if err := p.onGetPeerAddresses(outChan); err != nil {
@@ -1327,8 +1267,7 @@ func (p *Peer) onPushTransaction(tx *Transaction, outChan chan<- Message) error 
 }
 
 // Handle a request to set a transaction filter for the connection
-func (p *Peer) onFilterLoad(filterType string, filterBytes []byte,
-	filterLoadChan chan<- *cuckoo.Filter, outChan chan<- Message) error {
+func (p *Peer) onFilterLoad(filterType string, filterBytes []byte, outChan chan<- Message) error {
 	log.Printf("Received filter_load (size: %d), from: %s\n", len(filterBytes), p.conn.RemoteAddr())
 
 	// check filter type
@@ -1356,14 +1295,20 @@ func (p *Peer) onFilterLoad(filterType string, filterBytes []byte,
 		return err
 	}
 
-	// send it back to the writer goroutine to set and use it
-	filterLoadChan <- filter
+	// set the filter
+	func() {
+		p.filterLock.Lock()
+		defer p.filterLock.Unlock()
+		p.filter = filter
+	}()
+
+	// send the empty result
+	outChan <- Message{Type: "filter_result"}
 	return nil
 }
 
 // Handle a request to add a set of public keys to the filter
-func (p *Peer) onFilterAdd(pubKeys []ed25519.PublicKey,
-	filterAddChan chan<- []ed25519.PublicKey, outChan chan<- Message) error {
+func (p *Peer) onFilterAdd(pubKeys []ed25519.PublicKey, outChan chan<- Message) error {
 	log.Printf("Received filter_add (public keys: %d), from: %s\n",
 		len(pubKeys), p.conn.RemoteAddr())
 
@@ -1376,16 +1321,53 @@ func (p *Peer) onFilterAdd(pubKeys []ed25519.PublicKey,
 		return err
 	}
 
-	// send it to the writer goroutine to add them
-	filterAddChan <- pubKeys
+	err := func() error {
+		p.filterLock.Lock()
+		defer p.filterLock.Unlock()
+		// set the filter if it's not set
+		if p.filter == nil {
+			p.filter = cuckoo.NewFilter(1 << 16)
+		}
+		// perform the inserts
+		for _, pubKey := range pubKeys {
+			if !p.filter.Insert(pubKey[:]) {
+				return fmt.Errorf("Unable to insert into filter")
+			}
+		}
+		return nil
+	}()
+
+	// send the result
+	var m Message
+	if err != nil {
+		m = Message{Type: "filter_result", Body: FilterResultMessage{Error: err.Error()}}
+	} else {
+		m = Message{Type: "filter_result"}
+	}
+	outChan <- m
 	return nil
 }
 
-func (p *Peer) onGetFilterTransactionQueue(filterTxQueueChan chan<- bool) {
+// Send back a filtered view of the transaction queue
+func (p *Peer) onGetFilterTransactionQueue(outChan chan<- Message) {
 	log.Printf("Received get_filter_transaction_queue, from: %s\n", p.conn.RemoteAddr())
 
-	// this needs to be processed by the writer thread since it owns the filter
-	filterTxQueueChan <- true
+	ftq := FilterTransactionQueueMessage{}
+
+	p.filterLock.RLock()
+	defer p.filterLock.RUnlock()
+	if p.filter == nil {
+		ftq.Error = "No filter set"
+	} else {
+		transactions := p.txQueue.Get(0)
+		for _, tx := range transactions {
+			if p.filterLookup(tx) {
+				ftq.Transactions = append(ftq.Transactions, tx)
+			}
+		}
+	}
+
+	outChan <- Message{Type: "filter_transaction_queue", Body: ftq}
 }
 
 // Returns true if the transaction is of interest to the peer
@@ -1393,6 +1375,7 @@ func (p *Peer) filterLookup(tx *Transaction) bool {
 	if p.filter == nil {
 		return true
 	}
+
 	if !tx.IsCoinbase() {
 		if p.filter.Lookup(tx.From[:]) {
 			return true
@@ -1403,6 +1386,9 @@ func (p *Peer) filterLookup(tx *Transaction) bool {
 
 // Called from the writer context
 func (p *Peer) createFilterBlock(id BlockID, block *Block) (*FilterBlockMessage, error) {
+	p.filterLock.RLock()
+	defer p.filterLock.RUnlock()
+
 	if p.filter == nil {
 		// nothing to do
 		return nil, nil
@@ -1413,13 +1399,7 @@ func (p *Peer) createFilterBlock(id BlockID, block *Block) (*FilterBlockMessage,
 
 	// filter out transactions the peer isn't interested in
 	for _, tx := range block.Transactions {
-		if !tx.IsCoinbase() {
-			if p.filter.Lookup(tx.From[:]) {
-				fb.Transactions = append(fb.Transactions, tx)
-				continue
-			}
-		}
-		if p.filter.Lookup(tx.To[:]) {
+		if p.filterLookup(tx) {
 			fb.Transactions = append(fb.Transactions, tx)
 		}
 	}
