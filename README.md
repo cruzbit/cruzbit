@@ -27,7 +27,7 @@ cruzbit is experimental alpha-quality software. There may be bugs.
 
 If you missed out on the opportunity to mine other cryptocurrencies you could give cruzbit a try!
 
-1. [Install Go](https://golang.org/doc/install)
+1. Install [Go](https://golang.org/doc/install)
 2. Install the [wallet](https://github.com/cruzbit/cruzbit/tree/master/wallet)
 3. Run the wallet and issue a `newkey` command. Record the public key.
 4. Install the [client](https://github.com/cruzbit/cruzbit/tree/master/client)
