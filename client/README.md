@@ -1,3 +1,5 @@
+![cruzbit_logo_v1 half](https://user-images.githubusercontent.com/51346587/61192334-61417480-a668-11e9-94a6-bdbc43243600.png)
+
 # client
 
 A client is a fully validating and mining peer-to-peer node in the cruzbit network.
