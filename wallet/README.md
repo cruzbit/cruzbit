@@ -1,3 +1,5 @@
+![cruzbit_logo_v1 half](https://user-images.githubusercontent.com/51346587/61192334-61417480-a668-11e9-94a6-bdbc43243600.png)
+
 # wallet
 
 A wallet is a lightweight client which connects to a peer to receive balance and transaction history information.
