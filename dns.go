@@ -120,6 +120,7 @@ var Seeders = [...]string{
 	"66.172.12.98:8831",
 	"66.117.62.146:8831",
 	"dns.cruzbit.xyz:8831",
+	"67.177.244.230:8831",
 }
 
 // Query DNS seeders
