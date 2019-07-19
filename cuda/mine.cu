@@ -195,6 +195,8 @@ int cuda_init() {
     states[i].block_size = props.warpSize;
     states[i].num_blocks = states[i].max_threads / states[i].block_size;
 
+    cudaSetDevice(i);
+
     // allocate memory used on device
     cudaMalloc(&states[i].first_cu, 512);
     cudaMalloc(&states[i].last_cu, 512);
