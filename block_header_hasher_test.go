@@ -121,6 +121,7 @@ func compareIDs(block *Block) bool {
 	id, _ := block.ID()
 
 	// use delta method
-	id2 := new(BlockID).SetBigInt(block.Header.IDFast())
+	idInt, _ := block.Header.IDFast(0)
+	id2 := new(BlockID).SetBigInt(idInt)
 	return id == *id2
 }
