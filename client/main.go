@@ -68,6 +68,15 @@ func main() {
 		}
 	}
 
+	// initialize CUDA if enabled
+	if CUDA_ENABLED && *numMinersPtr > 0 {
+		deviceCount := CudaInit()
+		if deviceCount != *numMinersPtr {
+			log.Fatalf("CUDA enabled but -numminers is %d and supported devices is %d\n",
+				*numMinersPtr, deviceCount)
+		}
+	}
+
 	// load genesis block
 	genesisBlock := new(Block)
 	if err := json.Unmarshal([]byte(GenesisBlockJson), genesisBlock); err != nil {

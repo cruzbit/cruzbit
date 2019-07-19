@@ -212,8 +212,8 @@ func (m *Miner) run() {
 			}
 
 			// hash the block and check the proof-of-work
-			hashes++
-			idInt := block.Header.IDFast()
+			idInt, attempts := block.Header.IDFast(m.num)
+			hashes += attempts
 			if idInt.Cmp(targetInt) <= 0 {
 				// found a solution
 				id := new(BlockID).SetBigInt(idInt)
@@ -291,7 +291,7 @@ func (h *HashrateMonitor) run() {
 	defer h.wg.Done()
 
 	var totalHashes int64
-	updateInterval := 5 * time.Minute
+	updateInterval := 1 * time.Minute
 	ticker := time.NewTicker(updateInterval)
 	defer ticker.Stop()
 

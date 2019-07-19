@@ -6,6 +6,7 @@ package cruzbit
 import (
 	"encoding/hex"
 	"hash"
+	"log"
 	"math/big"
 	"strconv"
 
@@ -32,12 +33,13 @@ type BlockHeaderHasher struct {
 	txCountLen int
 
 	// used for hashing
-	initialized bool
-	bufLen      int
-	buffer      []byte
-	hasher      HashWithRead
-	resultBuf   [32]byte
-	result      *big.Int
+	initialized      bool
+	bufLen           int
+	buffer           []byte
+	hasher           HashWithRead
+	resultBuf        [32]byte
+	result           *big.Int
+	hashesPerAttempt int64
 }
 
 // HashWithRead extends hash.Hash to provide a Read interface.
@@ -69,9 +71,10 @@ func NewBlockHeaderHasher() *BlockHeaderHasher {
 
 	// initialize the hasher
 	return &BlockHeaderHasher{
-		buffer: make([]byte, bufLen),
-		hasher: sha3.New256().(HashWithRead),
-		result: new(big.Int),
+		buffer:           make([]byte, bufLen),
+		hasher:           sha3.New256().(HashWithRead),
+		result:           new(big.Int),
+		hashesPerAttempt: 1,
 	}
 }
 
@@ -146,12 +149,20 @@ func (h *BlockHeaderHasher) initBuffer(header *BlockHeader) {
 }
 
 // Update is called everytime the header is updated and the caller wants its new hash value/ID.
-func (h *BlockHeaderHasher) Update(header *BlockHeader) *big.Int {
+func (h *BlockHeaderHasher) Update(minerNum int, header *BlockHeader) (*big.Int, int64) {
 	if !h.initialized {
 		h.initBuffer(header)
+		if CUDA_ENABLED {
+			lastOffset := h.nonceOffset + h.nonceLen
+			h.hashesPerAttempt = CudaMinerUpdate(minerNum, h.buffer, h.bufLen,
+				h.nonceOffset, lastOffset, header.Target)
+		}
 	} else {
+		var bufferChanged bool
+
 		// hash_list_root
 		if h.previousHashListRoot != header.HashListRoot {
+			bufferChanged = true
 			// write out the new value
 			h.previousHashListRoot = header.HashListRoot
 			hex.Encode(h.buffer[h.hashListRootOffset:], header.HashListRoot[:])
@@ -161,6 +172,7 @@ func (h *BlockHeaderHasher) Update(header *BlockHeader) *big.Int {
 
 		// time
 		if h.previousTime != header.Time {
+			bufferChanged = true
 			h.previousTime = header.Time
 
 			// write out the new value
@@ -194,7 +206,8 @@ func (h *BlockHeaderHasher) Update(header *BlockHeader) *big.Int {
 		}
 
 		// nonce
-		if offset != 0 || h.previousNonce != header.Nonce {
+		if offset != 0 || (!CUDA_ENABLED && h.previousNonce != header.Nonce) {
+			bufferChanged = true
 			h.previousNonce = header.Nonce
 
 			// write out the new value (or old value at a new location)
@@ -221,6 +234,7 @@ func (h *BlockHeaderHasher) Update(header *BlockHeader) *big.Int {
 
 		// transaction_count
 		if offset != 0 || h.previousTransactionCount != header.TransactionCount {
+			bufferChanged = true
 			h.previousTransactionCount = header.TransactionCount
 
 			// write out the new value (or old value at a new location)
@@ -241,6 +255,35 @@ func (h *BlockHeaderHasher) Update(header *BlockHeader) *big.Int {
 
 		// it's possible (likely) we did a bunch of encoding with no net impact to the buffer length
 		h.bufLen += offset
+
+		if CUDA_ENABLED && bufferChanged {
+			// something besides the nonce changed since last time. update the buffers in CUDA.
+			lastOffset := h.nonceOffset + h.nonceLen
+			h.hashesPerAttempt = CudaMinerUpdate(minerNum, h.buffer, h.bufLen,
+				h.nonceOffset, lastOffset, header.Target)
+		}
+	}
+
+	if CUDA_ENABLED {
+		var nonce int64 = CudaMinerMine(minerNum, header.Nonce)
+		if nonce == 0x7FFFFFFFFFFFFFFF {
+			h.result.SetBytes(
+				// indirectly let miner.go know we failed
+				[]byte{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+					0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+					0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+					0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff},
+			)
+			// -1 here for the +1 done in miner.go
+			header.Nonce += h.hashesPerAttempt - 1
+			return h.result, h.hashesPerAttempt
+		} else {
+			log.Printf("CUDA miner %d found a possible solution: %d, double-checking it...\n", minerNum, nonce)
+			// rebuild the buffer with the new nonce since we don't update it
+			// per attempt when using CUDA.
+			header.Nonce = nonce
+			h.initBuffer(header)
+		}
 	}
 
 	// hash it
@@ -248,5 +291,5 @@ func (h *BlockHeaderHasher) Update(header *BlockHeader) *big.Int {
 	h.hasher.Write(h.buffer[:h.bufLen])
 	h.hasher.Read(h.resultBuf[:])
 	h.result.SetBytes(h.resultBuf[:])
-	return h.result
+	return h.result, h.hashesPerAttempt
 }

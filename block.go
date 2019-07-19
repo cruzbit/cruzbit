@@ -179,11 +179,11 @@ func (header BlockHeader) ID() (BlockID, error) {
 }
 
 // IDFast computes an ID for a given block header when mining.
-func (header *BlockHeader) IDFast() *big.Int {
+func (header *BlockHeader) IDFast(minerNum int) (*big.Int, int64) {
 	if header.hasher == nil {
 		header.hasher = NewBlockHeaderHasher()
 	}
-	return header.hasher.Update(header)
+	return header.hasher.Update(minerNum, header)
 }
 
 // Compare returns true if the header indicates it is a better chain than "theirHeader" up to both points.
