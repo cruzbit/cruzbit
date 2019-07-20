@@ -33,7 +33,7 @@ func CudaMinerUpdate(minerNum int, headerBytes []byte, headerBytesLen, startNonc
 		unsafe.Pointer(&target[0])))
 }
 
-// CudaMine is called on every solution attempt by a miner goroutine.
+// CudaMinerMine is called on every solution attempt by a miner goroutine.
 // It will perform N hashing attempts where N is the maximum number of threads your device is capable of executing.
 // Returns a solving nonce; otherwise 0x7FFFFFFFFFFFFFFF.
 func CudaMinerMine(minerNum int, startNonce int64) int64 {

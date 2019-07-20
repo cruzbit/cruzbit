@@ -1,4 +1,10 @@
-# This is a CUDA port of tiny_sha3 which also includes mining specific calls for cruzbit. Original project's README follows. -asdvxgxasjab 19-Jul-19
+### Updated 19-Jul-19:
+
+This is a CUDA port of tiny_sha3, which also now includes mining specific calls for use by the cruzbit client.
+Original project's README follows.
+
+Take it easy,
+-asdvxgxasjab
 
 # tiny_sha3
 Very small, readable implementation of the FIPS 202 and SHA3 hash function.
