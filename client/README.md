@@ -37,7 +37,7 @@ With the above specified options, the client will:
 - **dnsseed** - If specified, run a DNS server to allow others to find peers on UDP port 8831.
 - **compress** - If specified, compress blocks on disk with [LZ4](https://en.wikipedia.org/wiki/LZ4_(compression_algorithm)). Can safely be toggled.
 - **numminers** - Number of miner threads to run. Default is 1.
-- **noirc** - Disable use of IRC for peer discovery.
+- **noirc** - Disable use of IRC for peer discovery. Default is true.
 - **noaccept** - Disable inbound peer connections.
 - **keyfile** - Path to a file containing public keys to use when mining. Keys will be used randomly.
 - **prune** - If specified, only the last 2016 blocks (roughly 2 weeks) worth of transaction and public key transaction indices are stored in the ledger. This only impacts a wallet's ability to query for history older than that. It can still query for current balances of all public keys.
