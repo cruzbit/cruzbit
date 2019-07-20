@@ -34,7 +34,7 @@ func main() {
 	dnsSeedPtr := flag.Bool("dnsseed", false, "Run a DNS server to allow others to find peers")
 	compressPtr := flag.Bool("compress", false, "Compress blocks on disk with lz4")
 	numMinersPtr := flag.Int("numminers", 1, "Number of miners to run")
-	noIrcPtr := flag.Bool("noirc", false, "Disable use of IRC for peer discovery")
+	noIrcPtr := flag.Bool("noirc", true, "Disable use of IRC for peer discovery")
 	noAcceptPtr := flag.Bool("noaccept", false, "Disable inbound peer connections")
 	prunePtr := flag.Bool("prune", false, "Prune transaction and public key transaction indices")
 	keyFilePtr := flag.String("keyfile", "", "Path to a file containing public keys to use when mining")
