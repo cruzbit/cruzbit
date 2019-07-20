@@ -228,7 +228,7 @@ func (m *Miner) run() {
 				m.keyIndex = rand.Intn(len(m.pubKeys))
 			} else {
 				// no solution yet
-				block.Header.Nonce += 1
+				block.Header.Nonce += attempts
 				if block.Header.Nonce > MAX_NUMBER {
 					block.Header.Nonce = 0
 				}

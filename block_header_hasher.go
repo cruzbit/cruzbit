@@ -274,8 +274,6 @@ func (h *BlockHeaderHasher) Update(minerNum int, header *BlockHeader) (*big.Int,
 					0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
 					0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff},
 			)
-			// -1 here for the +1 done in miner.go
-			header.Nonce += h.hashesPerAttempt - 1
 			return h.result, h.hashesPerAttempt
 		} else {
 			log.Printf("CUDA miner %d found a possible solution: %d, double-checking it...\n", minerNum, nonce)
