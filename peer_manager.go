@@ -20,36 +20,37 @@ import (
 // PeerManager manages incoming and outgoing peer connections on behalf of the client.
 // It also manages finding peers to connect to.
 type PeerManager struct {
-	genesisID       BlockID
-	peerStore       PeerStorage
-	blockStore      BlockStorage
-	ledger          Ledger
-	processor       *Processor
-	txQueue         TransactionQueue
-	blockQueue      *BlockQueue
-	dataDir         string
-	myIP            string
-	peer            string
-	certPath        string
-	keyPath         string
-	port            int
-	inboundLimit    int
-	accept          bool
-	accepting       bool
-	irc             bool
-	dnsseed         bool
-	inPeers         map[string]*Peer
-	outPeers        map[string]*Peer
-	inPeersLock     sync.RWMutex
-	outPeersLock    sync.RWMutex
-	addrChan        chan string
-	peerNonce       string
-	open            bool
-	privateIPBlocks []*net.IPNet
-	server          *http.Server
-	cancelFunc      context.CancelFunc
-	shutdownChan    chan bool
-	wg              sync.WaitGroup
+	genesisID         BlockID
+	peerStore         PeerStorage
+	blockStore        BlockStorage
+	ledger            Ledger
+	processor         *Processor
+	txQueue           TransactionQueue
+	blockQueue        *BlockQueue
+	dataDir           string
+	myIP              string
+	peer              string
+	certPath          string
+	keyPath           string
+	port              int
+	inboundLimit      int
+	accept            bool
+	accepting         bool
+	irc               bool
+	dnsseed           bool
+	inPeers           map[string]*Peer
+	inPeerCountByHost map[string]int
+	outPeers          map[string]*Peer
+	inPeersLock       sync.RWMutex
+	outPeersLock      sync.RWMutex
+	addrChan          chan string
+	peerNonce         string
+	open              bool
+	privateIPBlocks   []*net.IPNet
+	server            *http.Server
+	cancelFunc        context.CancelFunc
+	shutdownChan      chan bool
+	wg                sync.WaitGroup
 }
 
 // NewPeerManager returns a new PeerManager instance.
@@ -83,30 +84,31 @@ func NewPeerManager(
 	}
 
 	return &PeerManager{
-		genesisID:       genesisID,
-		peerStore:       peerStore,
-		blockStore:      blockStore,
-		ledger:          ledger,
-		processor:       processor,
-		txQueue:         txQueue,
-		blockQueue:      NewBlockQueue(),
-		dataDir:         dataDir,
-		myIP:            myExternalIP, // set if upnp was enabled and successful
-		peer:            peer,
-		certPath:        certPath,
-		keyPath:         keyPath,
-		port:            port,
-		inboundLimit:    inboundLimit,
-		accept:          accept,
-		irc:             irc,
-		dnsseed:         dnsseed,
-		inPeers:         make(map[string]*Peer),
-		outPeers:        make(map[string]*Peer),
-		addrChan:        make(chan string, 10000),
-		peerNonce:       strconv.Itoa(int(rand.Int31())),
-		privateIPBlocks: privateIPBlocks,
-		server:          server,
-		shutdownChan:    make(chan bool),
+		genesisID:         genesisID,
+		peerStore:         peerStore,
+		blockStore:        blockStore,
+		ledger:            ledger,
+		processor:         processor,
+		txQueue:           txQueue,
+		blockQueue:        NewBlockQueue(),
+		dataDir:           dataDir,
+		myIP:              myExternalIP, // set if upnp was enabled and successful
+		peer:              peer,
+		certPath:          certPath,
+		keyPath:           keyPath,
+		port:              port,
+		inboundLimit:      inboundLimit,
+		accept:            accept,
+		irc:               irc,
+		dnsseed:           dnsseed,
+		inPeers:           make(map[string]*Peer),
+		inPeerCountByHost: make(map[string]int),
+		outPeers:          make(map[string]*Peer),
+		addrChan:          make(chan string, 10000),
+		peerNonce:         strconv.Itoa(int(rand.Int31())),
+		privateIPBlocks:   privateIPBlocks,
+		server:            server,
+		shutdownChan:      make(chan bool),
 	}
 }
 
@@ -447,6 +449,13 @@ func (p *PeerManager) listenForPeers(ctx context.Context) bool {
 func (p *PeerManager) acceptConnections() {
 	// handle incoming connection upgrade requests
 	peerHandler := func(w http.ResponseWriter, r *http.Request) {
+		// check the connection limit for this peer address
+		if !p.checkHostConnectionLimit(r.RemoteAddr) {
+			log.Printf("Too many connections from this peer's host: %s\n", r.RemoteAddr)
+			w.WriteHeader(http.StatusServiceUnavailable)
+			return
+		}
+
 		// check the peer nonce
 		theirNonce := r.Header.Get("Cruzbit-Peer-Nonce")
 		if theirNonce == p.peerNonce {
@@ -549,6 +558,11 @@ func (p *PeerManager) addToOutboundSet(addr string, peer *Peer) bool {
 
 // Helper to add peers to the inbound set if they'll fit
 func (p *PeerManager) addToInboundSet(addr string, peer *Peer) bool {
+	host, _, err := net.SplitHostPort(addr)
+	if err != nil {
+		log.Printf("Error parsing IP %s: %s\n", addr, err)
+		return false
+	}
 	p.inPeersLock.Lock()
 	defer p.inPeersLock.Unlock()
 	if len(p.inPeers) == p.inboundLimit {
@@ -559,9 +573,51 @@ func (p *PeerManager) addToInboundSet(addr string, peer *Peer) bool {
 		// already connected
 		return false
 	}
+	// update the count for this IP
+	count, ok := p.inPeerCountByHost[host]
+	if !ok {
+		p.inPeerCountByHost[host] = 1
+	} else {
+		p.inPeerCountByHost[host] = count + 1
+	}
 	p.inPeers[addr] = peer
 	log.Printf("Inbound peer count: %d\n", len(p.inPeers))
 	return true
+}
+
+// Returns false if this host has too many inbound connections already.
+func (p *PeerManager) checkHostConnectionLimit(addr string) bool {
+	// split host and port
+	host, _, err := net.SplitHostPort(addr)
+	if err != nil {
+		log.Printf("Error parsing host from %s: %s\n", addr, err)
+		return false
+	}
+	// resolve the host to an ip
+	ips, err := net.LookupIP(host)
+	if err != nil {
+		log.Printf("Unable to resolve IP address for: %s, error: %s", host, err)
+		return false
+	}
+	if len(ips) == 0 {
+		log.Printf("No IP address found for peer address: %s", addr)
+		return false
+	}
+	// filter out local networks
+	for _, block := range p.privateIPBlocks {
+		if block.Contains(ips[0]) {
+			// no limit for loopback peers
+			return true
+		}
+	}
+
+	p.inPeersLock.Lock()
+	defer p.inPeersLock.Unlock()
+	count, ok := p.inPeerCountByHost[host]
+	if !ok {
+		return true
+	}
+	return count < MAX_INBOUND_PEER_CONNECTIONS_FROM_SAME_HOST
 }
 
 // Helper to check if a peer address exists in the outbound set
@@ -582,9 +638,19 @@ func (p *PeerManager) removeFromOutboundSet(addr string) {
 
 // Helper to remove peers from the inbound set
 func (p *PeerManager) removeFromInboundSet(addr string) {
+	// we parsed this address on the way in so an error isn't possible
+	host, _, _ := net.SplitHostPort(addr)
 	p.inPeersLock.Lock()
 	defer p.inPeersLock.Unlock()
 	delete(p.inPeers, addr)
+	if count, ok := p.inPeerCountByHost[host]; ok {
+		count--
+		if count == 0 {
+			delete(p.inPeerCountByHost, host)
+		} else {
+			p.inPeerCountByHost[host] = count
+		}
+	}
 	log.Printf("Inbound peer count: %d\n", len(p.inPeers))
 }
 
@@ -598,9 +664,11 @@ func (p *PeerManager) dropRandomPeer() {
 			peers = append(peers, peer)
 		}
 	}()
-	peer := peers[rand.Intn(len(peers))]
-	log.Printf("Dropping random peer: %s\n", peer.conn.RemoteAddr())
-	peer.Shutdown()
+	if len(peers) > 0 {
+		peer := peers[rand.Intn(len(peers))]
+		log.Printf("Dropping random peer: %s\n", peer.conn.RemoteAddr())
+		peer.Shutdown()
+	}
 }
 
 // Parse, resolve and validate peer addreses
