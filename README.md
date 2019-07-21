@@ -33,7 +33,7 @@ If you missed out on the opportunity to mine other cryptocurrencies you could gi
 4. Install the [client](https://github.com/cruzbit/cruzbit/tree/master/client)
 5. Run the client using the public key from step 4. as the `-pubkey` argument.
 
-Complete steps for installation of Go and the cruzbit binaries on Linux can be found [here](https://gist.github.com/setanimals/f562ed7dd1c69af3fbe960c7b9502615).
+Complete steps for installation of Go and the cruzbit binaries on Linux can be found [here](https://gist.github.com/setanimals/f562ed7dd1c69af3fbe960c7b9502615). Steps to enable mining with Nvidia GPUs can be found [here](https://github.com/cruzbit/cruzbit/blob/master/cuda/BUILDING.md).
 
 Like bitcoin, any blocks you mine will need to have an additional 100 blocks mined on top of them prior to the new cruzbits being applied to your balance. This is to mitigate a potentially poor user experience in the case of honest blockchain reorganizations.
 
