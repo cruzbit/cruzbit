@@ -4,7 +4,7 @@ This is a CUDA port of tiny_sha3, which also now includes mining specific calls 
 Original project's README follows.
 
 Take it easy,
--asdvxgxasjab
+- asdvxgxasjab
 
 # tiny_sha3
 Very small, readable implementation of the FIPS 202 and SHA3 hash function.
