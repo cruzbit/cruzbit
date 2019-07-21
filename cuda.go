@@ -4,7 +4,7 @@
 
 package cruzbit
 
-//#cgo LDFLAGS: -L./cuda/build -lcuda
+//#cgo LDFLAGS: -lcruzbit_cuda
 //
 // #include <stdint.h>
 //
