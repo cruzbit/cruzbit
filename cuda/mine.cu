@@ -427,11 +427,13 @@ int cuda_init() {
       return -1;
     }
 
+#if 0
     error = cudaSetDeviceFlags(cudaDeviceScheduleBlockingSync);
     if (error != cudaSuccess) {
       printf("cudaSetDeviceFlags: %s\n", _cudaErrorToString(error));
       return -1;
     }
+#endif
 
     // allocate memory used on device
     cudaMalloc(&states[i].first_cu, 512);
