@@ -1,6 +1,6 @@
 ## How to build with CUDA support
 
-Tested on Unbuntu Linux 18.10. This assumes you've followed [these steps](https://gist.github.com/setanimals/f562ed7dd1c69af3fbe960c7b9502615) so far.
+Tested on Ubuntu Linux 18.10. This assumes you've followed [these steps](https://gist.github.com/setanimals/f562ed7dd1c69af3fbe960c7b9502615) so far.
 
 ```bash
 sudo apt install -y build-essential
