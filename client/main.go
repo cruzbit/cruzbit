@@ -75,7 +75,7 @@ func main() {
 			log.Fatalf("CUDA enabled but -numminers is %d and supported devices is %d\n",
 				*numMinersPtr, deviceCount)
 		}
-		log.Pritnln("CUDA initialized")
+		log.Println("CUDA initialized")
 	}
 
 	// load genesis block
