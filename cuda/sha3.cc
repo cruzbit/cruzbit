@@ -1,15 +1,15 @@
-// sha3.cu
+// sha3.cc
 // 19-Nov-11  Markku-Juhani O. Saarinen <mjos@iki.fi>
 
 // Revised 07-Aug-15 to match with official release of FIPS PUB 202 "SHA3"
 // Revised 03-Sep-15 for portability + OpenSSL - style API
-// Revised 19-Jul-19 to run on Nvidia devices -asdvxgxasjab
+// Revised 21-Jul-19 to strip unneeded code -asdvxgxasjab
 
-#include "sha3_cu.h"
+#include "sha3.h"
 
 // update the state with given number of rounds
 
-__device__ void sha3_keccakf_cu(uint64_t st[25]) {
+void sha3_keccakf(uint64_t st[25]) {
   // constants
   const uint64_t keccakf_rndc[24] = {
       0x0000000000000001, 0x0000000000008082, 0x800000000000808a,
@@ -29,8 +29,9 @@ __device__ void sha3_keccakf_cu(uint64_t st[25]) {
   int i, j, r;
   uint64_t t, bc[5];
 
-#if 0
 #if __BYTE_ORDER__ != __ORDER_LITTLE_ENDIAN__
+#error "CUDA support only available on little-endian hosts."
+#if 0
   uint8_t *v;
 
   // endianess conversion. this is redundant on little-endian targets
@@ -78,8 +79,9 @@ __device__ void sha3_keccakf_cu(uint64_t st[25]) {
     st[0] ^= keccakf_rndc[r];
   }
 
-#if 0
 #if __BYTE_ORDER__ != __ORDER_LITTLE_ENDIAN__
+#error "CUDA support only available on little-endian hosts."
+#if 0
   // endianess conversion. this is redundant on little-endian targets
   for (i = 0; i < 25; i++) {
     v = (uint8_t *)&st[i];
@@ -99,7 +101,7 @@ __device__ void sha3_keccakf_cu(uint64_t st[25]) {
 
 // Initialize the context for SHA3
 
-__device__ int sha3_init_cu(sha3_ctx_t *c, int mdlen) {
+int sha3_init(sha3_ctx_t *c, int mdlen) {
   int i;
 
   for (i = 0; i < 25; i++)
@@ -113,7 +115,7 @@ __device__ int sha3_init_cu(sha3_ctx_t *c, int mdlen) {
 
 // update state with more data
 
-__device__ int sha3_update_cu(sha3_ctx_t *c, const void *data, size_t len) {
+int sha3_update(sha3_ctx_t *c, const void *data, size_t len) {
   size_t i;
   int j;
 
@@ -121,7 +123,7 @@ __device__ int sha3_update_cu(sha3_ctx_t *c, const void *data, size_t len) {
   for (i = 0; i < len; i++) {
     c->st.b[j++] ^= ((const uint8_t *)data)[i];
     if (j >= c->rsiz) {
-      sha3_keccakf_cu(c->st.q);
+      sha3_keccakf(c->st.q);
       j = 0;
     }
   }
@@ -132,12 +134,12 @@ __device__ int sha3_update_cu(sha3_ctx_t *c, const void *data, size_t len) {
 
 // finalize and output a hash
 
-__device__ int sha3_final_cu(void *md, sha3_ctx_t *c) {
+int sha3_final(void *md, sha3_ctx_t *c) {
   int i;
 
   c->st.b[c->pt] ^= 0x06;
   c->st.b[c->rsiz - 1] ^= 0x80;
-  sha3_keccakf_cu(c->st.q);
+  sha3_keccakf(c->st.q);
 
   for (i = 0; i < c->mdlen; i++) {
     ((uint8_t *)md)[i] = c->st.b[i];
@@ -148,12 +150,12 @@ __device__ int sha3_final_cu(void *md, sha3_ctx_t *c) {
 
 // compute a SHA-3 hash (md) of given byte length from "in"
 
-__device__ void *sha3_cu(const void *in, size_t inlen, void *md, int mdlen) {
+void *sha3(const void *in, size_t inlen, void *md, int mdlen) {
   sha3_ctx_t sha3;
 
-  sha3_init_cu(&sha3, mdlen);
-  sha3_update_cu(&sha3, in, inlen);
-  sha3_final_cu(md, &sha3);
+  sha3_init(&sha3, mdlen);
+  sha3_update(&sha3, in, inlen);
+  sha3_final(md, &sha3);
 
   return md;
 }

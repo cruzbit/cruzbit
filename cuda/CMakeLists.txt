@@ -6,5 +6,6 @@ set(CUDA_NVCC_FLAGS ${CUDA_NVCC_FLAGS}; -Xcompiler -fPIC)
 CUDA_ADD_LIBRARY(cruzbit_cuda SHARED
   mine.cu
   sha3.cu
+  sha3.cc
 )
 install(TARGETS cruzbit_cuda DESTINATION lib)

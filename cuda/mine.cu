@@ -1,4 +1,8 @@
+// mine.cu
+// 19-Jul-19 Provides cgo hooks to manage mining on Nvidia devices -asdvxgxasjab
+
 #include "sha3.h"
+#include "sha3_cu.h"
 #include <cuda.h>
 #include <inttypes.h>
 #include <stdio.h>
@@ -333,10 +337,10 @@ __device__ void debug_print_hash(const void *hash) {
   printf("\n");
 }
 
-// called from the gpu kernel
-__global__ void do_sha3(const void *first, size_t first_len, const void *last,
-                        size_t last_len, int64_t start_nonce, void *target,
-                        int64_t *good_nonce, int *hashes) {
+// called by each device thread
+__global__ void try_solve(int64_t start_nonce, const sha3_ctx_t *prev_sha3,
+                          const void *last, size_t last_len, const void *target,
+                          int64_t *good_nonce) {
   uint8_t hash[32];
   uint8_t nonce_s[20];
 
@@ -345,43 +349,24 @@ __global__ void do_sha3(const void *first, size_t first_len, const void *last,
   size_t n = (size_t)itoa(nonce, (char *)nonce_s);
 
   sha3_ctx_t sha3;
-
-  sha3_init_cu(&sha3, 32);
-  sha3_update_cu(&sha3, first, first_len);
+  memcpy(&sha3, prev_sha3, sizeof(sha3_ctx_t));
   sha3_update_cu(&sha3, nonce_s, n);
   sha3_update_cu(&sha3, last, last_len);
   sha3_final_cu(hash, &sha3);
 
-  // atomicAdd(hashes, 1);
-#if 0
-  if (index == 0) {
-    debug_print_buf(first, first_len);
-    debug_print_buf(nonce_s, n);
-    debug_print_buf(last, last_len);
-    debug_print_hash(hash);
-    debug_print_hash(target);
-  }
-#endif
-
   if (memcmp_cu(hash, target, 32) <= 0) {
-#if 0
-    debug_print_buf(first, first_len);
-    debug_print_buf(nonce_s, n);
-    debug_print_buf(last, last_len);
-    debug_print_hash(target);
-    debug_print_hash((char *)hash);
-#endif
     // found a solution. not thread-safe but a race is very unlikely
     *good_nonce = nonce;
   }
 }
 
+// device-local state
 struct miner_state {
-  void *first_cu, *last_cu, *target_cu;
-  size_t first_len, last_len;
   int num_blocks, block_size, max_threads;
+  sha3_ctx_t *prev_sha3_cu;
+  void *last_cu, *target_cu;
+  size_t last_len;
   int64_t *nonce_cu;
-  int *hashes_cu;
 };
 
 static struct miner_state *states = 0;
@@ -428,6 +413,7 @@ int cuda_init() {
     }
 
 #if 0
+    // I tried this but it noticeably impacted performance
     error = cudaSetDeviceFlags(cudaDeviceScheduleBlockingSync);
     if (error != cudaSuccess) {
       printf("cudaSetDeviceFlags: %s\n", _cudaErrorToString(error));
@@ -435,16 +421,11 @@ int cuda_init() {
     }
 #endif
 
-    // allocate memory used on device
-    cudaMalloc(&states[i].first_cu, 512);
+    // allocate memory used on device written to by the host
+    cudaMalloc(&states[i].prev_sha3_cu, sizeof(sha3_ctx_t));
     cudaMalloc(&states[i].last_cu, 512);
     cudaMalloc(&states[i].target_cu, 32);
     cudaMalloc(&states[i].nonce_cu, sizeof(int64_t));
-    cudaMalloc(&states[i].hashes_cu, sizeof(int));
-
-    cudaMemset(states[i].hashes_cu, 0, sizeof(int));
-    cudaMemset(states[i].nonce_cu, 0x7F, sizeof(int64_t));
-    cudaMemset(states[i].nonce_cu, 0xFF, sizeof(int64_t) - 1);
   }
 
   return device_count;
@@ -455,9 +436,11 @@ int miner_update(int miner_num, const void *first, size_t first_len,
                  const void *last, size_t last_len, const void *target) {
   cudaSetDevice(miner_num);
 
-  // copy the first part of the header
-  states[miner_num].first_len = first_len;
-  cudaMemcpy(states[miner_num].first_cu, first, first_len,
+  // hash the first (largest) part of the header once and copy the state
+  sha3_ctx_t sha3;
+  sha3_init(&sha3, 32);
+  sha3_update(&sha3, first, first_len);
+  cudaMemcpy(states[miner_num].prev_sha3_cu, &sha3, sizeof(sha3_ctx_t),
              cudaMemcpyHostToDevice);
 
   // copy the end part of the header
@@ -467,7 +450,7 @@ int miner_update(int miner_num, const void *first, size_t first_len,
   // copy the target
   cudaMemcpy(states[miner_num].target_cu, target, 32, cudaMemcpyHostToDevice);
 
-  // clear nonce
+  // set the nonce to "not found"
   cudaMemset(states[miner_num].nonce_cu, 0x7F, sizeof(int64_t));
   cudaMemset(states[miner_num].nonce_cu, 0xFF, sizeof(int64_t) - 1);
 
@@ -479,14 +462,12 @@ int miner_update(int miner_num, const void *first, size_t first_len,
 int64_t miner_mine(int miner_num, int64_t start_nonce) {
   cudaSetDevice(miner_num);
   int64_t nonce;
-  cudaMemset(states[miner_num].hashes_cu, 0, sizeof(int));
   int num_blocks = states[miner_num].num_blocks;
   int block_size = states[miner_num].block_size;
-  do_sha3<<<num_blocks, block_size>>>(
-      states[miner_num].first_cu, states[miner_num].first_len,
-      states[miner_num].last_cu, states[miner_num].last_len, start_nonce,
-      states[miner_num].target_cu, states[miner_num].nonce_cu,
-      states[miner_num].hashes_cu);
+  try_solve<<<num_blocks, block_size>>>(
+      start_nonce, states[miner_num].prev_sha3_cu, states[miner_num].last_cu,
+      states[miner_num].last_len, states[miner_num].target_cu,
+      states[miner_num].nonce_cu);
   cudaDeviceSynchronize();
   cudaMemcpy(&nonce, states[miner_num].nonce_cu, sizeof(int64_t),
              cudaMemcpyDeviceToHost);
