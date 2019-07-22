@@ -41,9 +41,7 @@ Also note, instead of mining with a single public key, you can use the wallet to
 
 ## Not interested in mining but want to play with cruzbit?
 
-No problem! Post a public key as a comment in [this thread](https://www.reddit.com/r/cruzbit/comments/c4cqx9/want_some_cruzbits_to_testplay_with/) and I'll send you some! Offer limited while supplies last :)
-
-Note that you can run the [client](https://github.com/cruzbit/cruzbit/tree/master/client) with `-numminers 0` so that it can function as your [wallet](https://github.com/cruzbit/cruzbit/tree/master/wallet) peer.
+No problem! You can run the [client](https://github.com/cruzbit/cruzbit/tree/master/client) with `-numminers 0` so that it can function as your [wallet](https://github.com/cruzbit/cruzbit/tree/master/wallet) peer.
 
 ## Discussion
 
