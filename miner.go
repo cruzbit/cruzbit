@@ -247,9 +247,16 @@ func (m *Miner) Shutdown() {
 // Create a new block off of the given tip block.
 func (m *Miner) createNextBlock(tipID BlockID, tipHeader *BlockHeader) (*Block, error) {
 	log.Printf("Miner %d mining new block from current tip %s\n", m.num, tipID)
+	pubKey := m.pubKeys[m.keyIndex]
+	return createNextBlock(tipID, tipHeader, m.txQueue, m.blockStore, pubKey, m.memo)
+}
+
+// Called by the miner as well as the peer to support get_work.
+func createNextBlock(tipID BlockID, tipHeader *BlockHeader, txQueue TransactionQueue,
+	blockStore BlockStorage, pubKey ed25519.PublicKey, memo string) (*Block, error) {
 
 	// fetch transactions to confirm from the queue
-	txs := m.txQueue.Get(MAX_TRANSACTIONS_TO_INCLUDE_PER_BLOCK - 1)
+	txs := txQueue.Get(MAX_TRANSACTIONS_TO_INCLUDE_PER_BLOCK - 1)
 
 	// calculate total fees
 	var fees int64 = 0
@@ -262,13 +269,13 @@ func (m *Miner) createNextBlock(tipID BlockID, tipHeader *BlockHeader) (*Block, 
 	reward := BlockCreationReward(newHeight) + fees
 
 	// build coinbase
-	tx := NewTransaction(nil, m.pubKeys[m.keyIndex], reward, 0, 0, 0, newHeight, m.memo)
+	tx := NewTransaction(nil, pubKey, reward, 0, 0, 0, newHeight, memo)
 
 	// prepend coinbase
 	txs = append([]*Transaction{tx}, txs...)
 
 	// compute the next target
-	newTarget, err := computeTarget(tipHeader, m.blockStore)
+	newTarget, err := computeTarget(tipHeader, blockStore)
 	if err != nil {
 		return nil, err
 	}
