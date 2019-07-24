@@ -267,8 +267,11 @@ func (p *Peer) run() {
 				// update read limit if necessary
 				p.updateReadLimit()
 
-				// create and send out new work if necessary
-				p.createNewWorkBlock(tip.BlockID, tip.Block.Header)
+				if tip.Connect && tip.More == false {
+					// only build off newly connected tip blocks.
+					// create and send out new work if necessary
+					p.createNewWorkBlock(tip.BlockID, tip.Block.Header)
+				}
 
 				if tip.Source == p.conn.RemoteAddr().String() {
 					// this is who sent us the block that caused the change
