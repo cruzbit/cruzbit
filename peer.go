@@ -1612,6 +1612,8 @@ func (p *Peer) onSubmitWork(sw SubmitWorkMessage) {
 
 	if err != nil {
 		m.Body = SubmitWorkResultMessage{WorkID: sw.WorkID, Error: err.Error()}
+	} else {
+		m.Body = SubmitWorkResultMessage{WorkID: sw.WorkID}
 	}
 
 	p.conn.SetWriteDeadline(time.Now().Add(writeWait))
