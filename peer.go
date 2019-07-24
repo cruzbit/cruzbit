@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"math/rand"
 	"net/http"
 	"net/url"
 	"sync"
@@ -38,6 +39,11 @@ type Peer struct {
 	filterLock                    sync.RWMutex
 	filter                        *cuckoo.Filter
 	addrChan                      chan<- string
+	workID                        int32
+	workBlock                     *Block
+	medianTimestamp               int64
+	pubKeys                       []ed25519.PublicKey
+	memo                          string
 	readLimitLock                 sync.RWMutex
 	readLimit                     int64
 	closeHandler                  func()
@@ -206,6 +212,10 @@ func (p *Peer) run() {
 		onConnectChan <- true
 	}()
 
+	// written to by the reader loop to update the current work block for the peer
+	getWorkChan := make(chan GetWorkMessage, 1)
+	submitWorkChan := make(chan SubmitWorkMessage, 1)
+
 	// writer goroutine loop
 	p.wg.Add(1)
 	go func() {
@@ -257,6 +267,9 @@ func (p *Peer) run() {
 				// update read limit if necessary
 				p.updateReadLimit()
 
+				// create and send out new work if necessary
+				p.createNewWorkBlock(tip.BlockID, tip.Block.Header)
+
 				if tip.Source == p.conn.RemoteAddr().String() {
 					// this is who sent us the block that caused the change
 					break
@@ -306,6 +319,9 @@ func (p *Peer) run() {
 				}
 
 			case newTx := <-newTxChan:
+				// update work if necessary
+				p.updateWorkBlock(newTx.TransactionID, newTx.Transaction)
+
 				if newTx.Source == p.conn.RemoteAddr().String() {
 					// this is who sent it to us
 					break
@@ -348,6 +364,12 @@ func (p *Peer) run() {
 					log.Printf("Error sending get_peer_addresses: %s, to: %s\n", err, p.conn.RemoteAddr())
 					p.conn.Close()
 				}
+
+			case gw := <-getWorkChan:
+				p.onGetWork(gw)
+
+			case sw := <-submitWorkChan:
+				p.onSubmitWork(sw)
 
 			case <-tickerPing.C:
 				//log.Printf("Sending ping message to: %s\n", p.conn.RemoteAddr())
@@ -658,6 +680,24 @@ func (p *Peer) run() {
 						MinAmount: MIN_AMOUNT_CRUZBITS,
 					},
 				}
+
+			case "get_work":
+				var gw GetWorkMessage
+				if err := json.Unmarshal(body, &gw); err != nil {
+					log.Printf("Error: %s, from: %s\n", err, p.conn.RemoteAddr())
+					return
+				}
+				log.Printf("Received get_work message, from: %s\n", p.conn.RemoteAddr())
+				getWorkChan <- gw
+
+			case "submit_work":
+				var sw SubmitWorkMessage
+				if err := json.Unmarshal(body, &sw); err != nil {
+					log.Printf("Error: %s, from: %s\n", err, p.conn.RemoteAddr())
+					return
+				}
+				log.Printf("Received submit_work message, from: %s\n", p.conn.RemoteAddr())
+				submitWorkChan <- sw
 
 			default:
 				log.Printf("Unknown message: %s, from: %s\n", m.Type, p.conn.RemoteAddr())
@@ -1442,6 +1482,142 @@ func (p *Peer) onPeerAddresses(addresses []string) {
 		}
 		// notify the peer manager
 		p.addrChan <- addr
+	}
+}
+
+// Called from the writer goroutine loop
+func (p *Peer) onGetWork(gw GetWorkMessage) {
+	var err error
+	if p.workBlock != nil {
+		err = fmt.Errorf("Peer already has work")
+	} else if len(gw.PublicKeys) == 0 {
+		err = fmt.Errorf("No public keys specified")
+	} else if len(gw.Memo) > MAX_MEMO_LENGTH {
+		err = fmt.Errorf("Max memo length (%d) exceeded: %d", MAX_MEMO_LENGTH, len(gw.Memo))
+	} else {
+		var tipID *BlockID
+		var tipHeader *BlockHeader
+		tipID, tipHeader, _, err = getChainTipHeader(p.ledger, p.blockStore)
+		if err != nil {
+			log.Printf("Error getting tip header: %s, for: %s\n", err, p.conn.RemoteAddr())
+		} else {
+			// create and send out new work
+			p.pubKeys = gw.PublicKeys
+			p.memo = gw.Memo
+			p.createNewWorkBlock(*tipID, tipHeader)
+		}
+	}
+
+	if err != nil {
+		m := Message{Type: "work", Body: WorkMessage{Error: err.Error()}}
+		p.conn.SetWriteDeadline(time.Now().Add(writeWait))
+		if err := p.conn.WriteJSON(m); err != nil {
+			log.Printf("Write error: %s, to: %s\n", err, p.conn.RemoteAddr())
+			p.conn.Close()
+		}
+	}
+}
+
+// Create a new work block for a mining peer. Called from the writer goroutine loop.
+func (p *Peer) createNewWorkBlock(tipID BlockID, tipHeader *BlockHeader) error {
+	if len(p.pubKeys) == 0 {
+		// peer doesn't want work
+		return nil
+	}
+
+	medianTimestamp, err := computeMedianTimestamp(tipHeader, p.blockStore)
+	if err != nil {
+		log.Printf("Error computing median timestamp: %s, for: %s\n", err, p.conn.RemoteAddr())
+	} else {
+		// create a new block
+		p.medianTimestamp = medianTimestamp
+		keyIndex := rand.Intn(len(p.pubKeys))
+		p.workID = rand.Int31()
+		p.workBlock, err = createNextBlock(tipID, tipHeader, p.txQueue, p.blockStore, p.pubKeys[keyIndex], p.memo)
+		if err != nil {
+			log.Printf("Error creating next block: %s, for: %s\n", err, p.conn.RemoteAddr())
+		}
+	}
+
+	m := Message{Type: "work"}
+	if err != nil {
+		m.Body = WorkMessage{WorkID: p.workID, Error: err.Error()}
+	} else {
+		m.Body = WorkMessage{WorkID: p.workID, Header: p.workBlock.Header, MinTime: p.medianTimestamp + 1}
+	}
+
+	p.conn.SetWriteDeadline(time.Now().Add(writeWait))
+	if err := p.conn.WriteJSON(m); err != nil {
+		log.Printf("Write error: %s, to: %s\n", err, p.conn.RemoteAddr())
+		p.conn.Close()
+		return err
+	}
+	return err
+}
+
+// Add the transaction to the current work block for the mining peer. Called from the writer goroutine loop.
+func (p *Peer) updateWorkBlock(id TransactionID, tx *Transaction) error {
+	if p.workBlock == nil {
+		// peer doesn't want work
+		return nil
+	}
+
+	if MAX_TRANSACTIONS_TO_INCLUDE_PER_BLOCK != 0 &&
+		len(p.workBlock.Transactions) >= MAX_TRANSACTIONS_TO_INCLUDE_PER_BLOCK {
+		log.Printf("Per-block transaction limit hit (%d)\n", len(p.workBlock.Transactions))
+		return nil
+	}
+
+	m := Message{Type: "work"}
+
+	// add the transaction to the block (it updates the coinbase fee)
+	err := p.workBlock.AddTransaction(id, tx)
+	if err != nil {
+		log.Printf("Error adding new transaction %s to block: %s\n", id, err)
+		// abandon the block
+		p.workBlock = nil
+		m.Body = WorkMessage{WorkID: p.workID, Error: err.Error()}
+	} else {
+		// send out the new work
+		p.workID = rand.Int31()
+		m.Body = WorkMessage{WorkID: p.workID, Header: p.workBlock.Header, MinTime: p.medianTimestamp + 1}
+	}
+
+	p.conn.SetWriteDeadline(time.Now().Add(writeWait))
+	if err := p.conn.WriteJSON(m); err != nil {
+		log.Printf("Write error: %s, to: %s\n", err, p.conn.RemoteAddr())
+		p.conn.Close()
+		return err
+	}
+
+	return err
+}
+
+// Handle a submission of mining work. Called from the writer goroutine loop.
+func (p *Peer) onSubmitWork(sw SubmitWorkMessage) {
+	m := Message{Type: "submit_work_result"}
+	id, err := sw.Header.ID()
+
+	if err != nil {
+		log.Printf("Error computing block ID: %s, from: %s\n", err, p.conn.RemoteAddr())
+	} else if sw.WorkID != p.workID {
+		err = fmt.Errorf("Expected work ID %d, found %d", p.workID, sw.WorkID)
+		log.Printf("%s, from: %s\n", err.Error(), p.conn.RemoteAddr())
+	} else {
+		p.workBlock.Header = sw.Header
+		err = p.processor.ProcessBlock(id, p.workBlock, p.conn.RemoteAddr().String())
+		log.Printf("Error processing work block: %s, for: %s\n", err, p.conn.RemoteAddr())
+		p.workBlock = nil
+	}
+
+	if err != nil {
+		m.Body = SubmitWorkResultMessage{WorkID: sw.WorkID, Error: err.Error()}
+	}
+
+	p.conn.SetWriteDeadline(time.Now().Add(writeWait))
+	if err := p.conn.WriteJSON(m); err != nil {
+		log.Printf("Write error: %s, to: %s\n", err, p.conn.RemoteAddr())
+		p.conn.Close()
 	}
 }
 
