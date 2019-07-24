@@ -223,6 +223,7 @@ type GetWorkMessage struct {
 // the minimum timestamp and that the nonce does not exceed MAX_NUMBER (2^53-1).
 // Type: "work"
 type WorkMessage struct {
+	WorkID  int32        `json:"work_id"`
 	Header  *BlockHeader `json:"header"`
 	MinTime int64        `json:"min_time"`
 	Error   string       `json:"error,omitempty"`
@@ -231,12 +232,13 @@ type WorkMessage struct {
 // SubmitWorkMessage is used by a mining peer to submit a potential solution to the client.
 // Type: "submit_work"
 type SubmitWorkMessage struct {
-	BlockID BlockID      `json:"block_id"`
-	Header  *BlockHeader `json:"header"`
+	WorkID int32        `json:"work_id"`
+	Header *BlockHeader `json:"header"`
 }
 
 // SubmitWorkResultMessage is used to inform a mining peer of the result of its work.
 // Type: "submit_work_result"
 type SubmitWorkResultMessage struct {
-	Error string `json:"error,omitempty"`
+	WorkID int32  `json:"work_id"`
+	Error  string `json:"error,omitempty"`
 }

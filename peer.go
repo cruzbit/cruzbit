@@ -39,6 +39,7 @@ type Peer struct {
 	filterLock                    sync.RWMutex
 	filter                        *cuckoo.Filter
 	addrChan                      chan<- string
+	workID                        int32
 	workBlock                     *Block
 	medianTimestamp               int64
 	pubKeys                       []ed25519.PublicKey
@@ -1531,6 +1532,7 @@ func (p *Peer) createNewWorkBlock(tipID BlockID, tipHeader *BlockHeader) error {
 		// create a new block
 		p.medianTimestamp = medianTimestamp
 		keyIndex := rand.Intn(len(p.pubKeys))
+		p.workID = rand.Int31()
 		p.workBlock, err = createNextBlock(tipID, tipHeader, p.txQueue, p.blockStore, p.pubKeys[keyIndex], p.memo)
 		if err != nil {
 			log.Printf("Error creating next block: %s, for: %s\n", err, p.conn.RemoteAddr())
@@ -1539,9 +1541,9 @@ func (p *Peer) createNewWorkBlock(tipID BlockID, tipHeader *BlockHeader) error {
 
 	m := Message{Type: "work"}
 	if err != nil {
-		m.Body = WorkMessage{Error: err.Error()}
+		m.Body = WorkMessage{WorkID: p.workID, Error: err.Error()}
 	} else {
-		m.Body = WorkMessage{Header: p.workBlock.Header, MinTime: p.medianTimestamp + 1}
+		m.Body = WorkMessage{WorkID: p.workID, Header: p.workBlock.Header, MinTime: p.medianTimestamp + 1}
 	}
 
 	p.conn.SetWriteDeadline(time.Now().Add(writeWait))
@@ -1574,10 +1576,11 @@ func (p *Peer) updateWorkBlock(id TransactionID, tx *Transaction) error {
 		log.Printf("Error adding new transaction %s to block: %s\n", id, err)
 		// abandon the block
 		p.workBlock = nil
-		m.Body = WorkMessage{Error: err.Error()}
+		m.Body = WorkMessage{WorkID: p.workID, Error: err.Error()}
 	} else {
 		// send out the new work
-		m.Body = WorkMessage{Header: p.workBlock.Header, MinTime: p.medianTimestamp + 1}
+		p.workID = rand.Int31()
+		m.Body = WorkMessage{WorkID: p.workID, Header: p.workBlock.Header, MinTime: p.medianTimestamp + 1}
 	}
 
 	p.conn.SetWriteDeadline(time.Now().Add(writeWait))
@@ -1597,6 +1600,9 @@ func (p *Peer) onSubmitWork(sw SubmitWorkMessage) {
 
 	if err != nil {
 		log.Printf("Error computing block ID: %s, from: %s\n", err, p.conn.RemoteAddr())
+	} else if sw.WorkID != p.workID {
+		err = fmt.Errorf("Expected work ID %d, found %d", p.workID, sw.WorkID)
+		log.Printf("%s, from: %s\n", err.Error(), p.conn.RemoteAddr())
 	} else {
 		p.workBlock.Header = sw.Header
 		err = p.processor.ProcessBlock(id, p.workBlock, p.conn.RemoteAddr().String())
@@ -1605,7 +1611,7 @@ func (p *Peer) onSubmitWork(sw SubmitWorkMessage) {
 	}
 
 	if err != nil {
-		m.Body = SubmitWorkResultMessage{Error: err.Error()}
+		m.Body = SubmitWorkResultMessage{WorkID: sw.WorkID, Error: err.Error()}
 	}
 
 	p.conn.SetWriteDeadline(time.Now().Add(writeWait))
