@@ -45,13 +45,13 @@ type GetBlockHeaderMessage struct {
 	BlockID BlockID `json:"block_id"`
 }
 
-// GetBlockHeaderByHeghtMessage is used to request a block header.
+// GetBlockHeaderByHeightMessage is used to request a block header.
 // Type: "get_block_header_by_height".
 type GetBlockHeaderByHeightMessage struct {
 	Height int64 `json:"height"`
 }
 
-// BlockHeaderMessage is used to send a peer a block's heder.
+// BlockHeaderMessage is used to send a peer a block's header.
 // Type: "block_header".
 type BlockHeaderMessage struct {
 	BlockID     *BlockID     `json:"block_id,omitempty"`
@@ -101,13 +101,13 @@ type PublicKeyBalance struct {
 	Balance   int64             `json:"balance"`
 }
 
-// GetTransactioMessage is used to request a confirmed transaction.
+// GetTransactionMessage is used to request a confirmed transaction.
 // Type: "get_transaction".
 type GetTransactionMessage struct {
 	TransactionID TransactionID `json:"transaction_id"`
 }
 
-// TransactionMessage us used to send a peer a confirmed transaction.
+// TransactionMessage is used to send a peer a confirmed transaction.
 // Type: "transaction"
 type TransactionMessage struct {
 	BlockID       *BlockID      `json:"block_id,omitempty"`
