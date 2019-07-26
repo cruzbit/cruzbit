@@ -746,9 +746,7 @@ func (l LedgerDisk) getPublicKeyTransactionIndicesRangeReverse(
 	}
 
 	// make it inclusive
-	if startIndex == 0 {
-		startHeight += 1
-	}
+	startIndex += 1
 	startKey, err := computePubKeyTransactionIndexKey(pubKey, &startHeight, &startIndex)
 	if err != nil {
 		return
