@@ -156,6 +156,10 @@ func (h *BlockHeaderHasher) Update(minerNum int, header *BlockHeader) (*big.Int,
 			lastOffset := h.nonceOffset + h.nonceLen
 			h.hashesPerAttempt = CudaMinerUpdate(minerNum, h.buffer, h.bufLen,
 				h.nonceOffset, lastOffset, header.Target)
+		} else if OPENCL_ENABLED {
+			lastOffset := h.nonceOffset + h.nonceLen
+			h.hashesPerAttempt = OpenCLMinerUpdate(minerNum, h.buffer, h.bufLen,
+				h.nonceOffset, lastOffset, header.Target)
 		}
 	} else {
 		var bufferChanged bool
@@ -206,7 +210,7 @@ func (h *BlockHeaderHasher) Update(minerNum int, header *BlockHeader) (*big.Int,
 		}
 
 		// nonce
-		if offset != 0 || (!CUDA_ENABLED && h.previousNonce != header.Nonce) {
+		if offset != 0 || ((!CUDA_ENABLED && !OPENCL_ENABLED) && h.previousNonce != header.Nonce) {
 			bufferChanged = true
 			h.previousNonce = header.Nonce
 
@@ -256,16 +260,27 @@ func (h *BlockHeaderHasher) Update(minerNum int, header *BlockHeader) (*big.Int,
 		// it's possible (likely) we did a bunch of encoding with no net impact to the buffer length
 		h.bufLen += offset
 
-		if CUDA_ENABLED && bufferChanged {
-			// something besides the nonce changed since last time. update the buffers in CUDA.
-			lastOffset := h.nonceOffset + h.nonceLen
-			h.hashesPerAttempt = CudaMinerUpdate(minerNum, h.buffer, h.bufLen,
-				h.nonceOffset, lastOffset, header.Target)
+		if bufferChanged {
+			if CUDA_ENABLED {
+				// something besides the nonce changed since last time. update the buffers in CUDA.
+				lastOffset := h.nonceOffset + h.nonceLen
+				h.hashesPerAttempt = CudaMinerUpdate(minerNum, h.buffer, h.bufLen,
+					h.nonceOffset, lastOffset, header.Target)
+			} else if OPENCL_ENABLED {
+				lastOffset := h.nonceOffset + h.nonceLen
+				h.hashesPerAttempt = OpenCLMinerUpdate(minerNum, h.buffer, h.bufLen,
+					h.nonceOffset, lastOffset, header.Target)
+			}
 		}
 	}
 
-	if CUDA_ENABLED {
-		var nonce int64 = CudaMinerMine(minerNum, header.Nonce)
+	if CUDA_ENABLED || OPENCL_ENABLED {
+		var nonce int64
+		if CUDA_ENABLED {
+			nonce = CudaMinerMine(minerNum, header.Nonce)
+		} else {
+			nonce = OpenCLMinerMine(minerNum, header.Nonce)
+		}
 		if nonce == 0x7FFFFFFFFFFFFFFF {
 			h.result.SetBytes(
 				// indirectly let miner.go know we failed
@@ -276,7 +291,7 @@ func (h *BlockHeaderHasher) Update(minerNum int, header *BlockHeader) (*big.Int,
 			)
 			return h.result, h.hashesPerAttempt
 		} else {
-			log.Printf("CUDA miner %d found a possible solution: %d, double-checking it...\n",
+			log.Printf("GPU miner %d found a possible solution: %d, double-checking it...\n",
 				minerNum, nonce)
 			// rebuild the buffer with the new nonce since we don't update it
 			// per attempt when using CUDA.
