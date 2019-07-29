@@ -514,6 +514,10 @@ func (p *Peer) run() {
 					log.Printf("Error: %s, from: %s\n", err, p.conn.RemoteAddr())
 					return
 				}
+				if b.Block == nil {
+					log.Printf("Error: received nil block, from: %s\n", p.conn.RemoteAddr())
+					return
+				}
 				ok, err := p.onBlock(b.Block, outChan)
 				if err != nil {
 					log.Printf("Error: %s, from: %s\n", err, p.conn.RemoteAddr())
@@ -619,6 +623,10 @@ func (p *Peer) run() {
 				var pt PushTransactionMessage
 				if err := json.Unmarshal(body, &pt); err != nil {
 					log.Printf("Error: %s, from: %s\n", err, p.conn.RemoteAddr())
+					return
+				}
+				if pt.Transaction == nil {
+					log.Printf("Error: received nil transaction, from: %s\n", p.conn.RemoteAddr())
 					return
 				}
 				if err := p.onPushTransaction(pt.Transaction, outChan); err != nil {
