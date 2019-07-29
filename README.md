@@ -43,6 +43,10 @@ Also note, instead of mining with a single public key, you can use the wallet to
 
 No problem! You can run the [client](https://github.com/cruzbit/cruzbit/tree/master/client) with `-numminers 0` so that it can function as your [wallet](https://github.com/cruzbit/cruzbit/tree/master/wallet) peer.
 
+## License
+
+cruzbit is released under the terms of the MIT license. See [LICENSE](https://github.com/cruzbit/cruzbit/blob/master/LICENSE) for more information or see https://opensource.org/licenses/MIT.
+
 ## Discussion
 
 * **[Discord server](https://discord.gg/MRrEHYw)** for general chat as well as updates, including development status.
