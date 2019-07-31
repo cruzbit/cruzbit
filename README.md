@@ -19,6 +19,10 @@ cruzbit is very similar to [bitcoin](https://www.bitcoin.com/bitcoin.pdf) with t
 
 I noticed most people focusing on making more complex ledgers capable of executing "smart" contracts and/or crypto-magically obscuring transaction details and such. And I think those projects are pretty cool, but I'd always wanted to attempt to do the opposite and implement the simplest decentralized ledger I possibly could given lessons learned from bitcoin. I _think_ that's what cruzbit is. Anything that I thought wasn't strictly necessary in bitcoin, or was otherwise weird, I got rid of. I wanted the design to be conceptually simple and extremely developer-friendly. I finally had some personal time on my hands so I decided, why not. And now cruzbit exists.
 
+## License
+
+cruzbit is released under the terms of the MIT license. See [LICENSE](https://github.com/cruzbit/cruzbit/blob/master/LICENSE) for more information or see https://opensource.org/licenses/MIT.
+
 ## Warning
 
 cruzbit is experimental alpha-quality software. There may be bugs.
@@ -33,7 +37,11 @@ If you missed out on the opportunity to mine other cryptocurrencies you could gi
 4. Install the [client](https://github.com/cruzbit/cruzbit/tree/master/client)
 5. Run the client using the public key from step 4. as the `-pubkey` argument.
 
-Complete steps for installation of Go and the cruzbit binaries on Linux can be found [here](https://gist.github.com/setanimals/f562ed7dd1c69af3fbe960c7b9502615). Steps to enable mining with Nvidia GPUs can be found [here](https://github.com/cruzbit/cruzbit/blob/master/cuda/BUILDING.md).
+Complete steps for installation of Go and the cruzbit binaries on Linux can be found [here](https://gist.github.com/setanimals/f562ed7dd1c69af3fbe960c7b9502615).
+
+Steps to enable mining with [CUDA](https://developer.nvidia.com/cuda-zone) for Nvidia GPUs can be found [here](https://github.com/cruzbit/cruzbit/blob/master/cuda/BUILDING.md).
+
+Steps to enable mining with [OpenCL](https://www.khronos.org/opencl/) (for all GPUs, including AMD) can be found [here](https://github.com/cruzbit/cruzbit/blob/master/opencl/README.md).
 
 Like bitcoin, any blocks you mine will need to have an additional 100 blocks mined on top of them prior to the new cruzbits being applied to your balance. This is to mitigate a potentially poor user experience in the case of honest blockchain reorganizations.
 
@@ -42,10 +50,6 @@ Also note, instead of mining with a single public key, you can use the wallet to
 ## Not interested in mining but want to play with cruzbit?
 
 No problem! You can run the [client](https://github.com/cruzbit/cruzbit/tree/master/client) with `-numminers 0` so that it can function as your [wallet](https://github.com/cruzbit/cruzbit/tree/master/wallet) peer.
-
-## License
-
-cruzbit is released under the terms of the MIT license. See [LICENSE](https://github.com/cruzbit/cruzbit/blob/master/LICENSE) for more information or see https://opensource.org/licenses/MIT.
 
 ## Discussion
 
