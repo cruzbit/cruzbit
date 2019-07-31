@@ -68,14 +68,23 @@ func main() {
 		}
 	}
 
-	// initialize CUDA if enabled
-	if CUDA_ENABLED && *numMinersPtr > 0 {
-		deviceCount := CudaInit()
-		if deviceCount != *numMinersPtr {
-			log.Fatalf("CUDA enabled but -numminers is %d and supported devices is %d\n",
-				*numMinersPtr, deviceCount)
+	// initialize CUDA or OpenCL devices if enabled
+	if *numMinersPtr > 0 {
+		if CUDA_ENABLED {
+			deviceCount := CudaInit()
+			if deviceCount != *numMinersPtr {
+				log.Fatalf("CUDA enabled but -numminers is %d and supported devices is %d\n",
+					*numMinersPtr, deviceCount)
+			}
+			log.Println("CUDA initialized")
+		} else if OPENCL_ENABLED {
+			deviceCount := OpenCLInit()
+			if deviceCount != *numMinersPtr {
+				log.Fatalf("OpenCL enabled but -numminers is %d and supported devices is %d\n",
+					*numMinersPtr, deviceCount)
+			}
+			log.Println("OpenCL initialized")
 		}
-		log.Println("CUDA initialized")
 	}
 
 	// load genesis block
