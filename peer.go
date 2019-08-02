@@ -86,12 +86,12 @@ var peerDialer *websocket.Dialer = &websocket.Dialer{
 }
 
 // Connect connects outbound to a peer.
-func (p *Peer) Connect(ctx context.Context, addr, nonce, myAddr string) error {
+func (p *Peer) Connect(ctx context.Context, addr, nonce, myAddr string) (int, error) {
 	u := url.URL{Scheme: "wss", Host: addr, Path: "/" + p.genesisID.String()}
 	log.Printf("Connecting to %s", u.String())
 
 	if err := p.peerStore.OnConnectAttempt(addr); err != nil {
-		return err
+		return 0, err
 	}
 
 	header := http.Header{}
@@ -105,9 +105,13 @@ func (p *Peer) Connect(ctx context.Context, addr, nonce, myAddr string) error {
 	dialCtx, cancel := context.WithTimeout(ctx, connectWait)
 	defer cancel()
 
+	var statusCode int
 	conn, resp, err := peerDialer.DialContext(dialCtx, u.String(), header)
+	if resp != nil {
+		statusCode = resp.StatusCode
+	}
 	if err != nil {
-		if resp != nil && resp.StatusCode == http.StatusTooManyRequests {
+		if statusCode == http.StatusTooManyRequests {
 			// the peer is already connected to us inbound.
 			// mark it successful so we try it again in the future.
 			p.peerStore.OnConnectSuccess(addr)
@@ -115,12 +119,12 @@ func (p *Peer) Connect(ctx context.Context, addr, nonce, myAddr string) error {
 		} else {
 			p.peerStore.OnConnectFailure(addr)
 		}
-		return err
+		return statusCode, err
 	}
 
 	p.conn = conn
 	p.outbound = true
-	return p.peerStore.OnConnectSuccess(addr)
+	return statusCode, p.peerStore.OnConnectSuccess(addr)
 }
 
 // OnClose specifies a handler to call when the peer connection is closed.

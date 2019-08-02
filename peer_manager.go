@@ -304,8 +304,8 @@ func (p *PeerManager) connectToPeers(ctx context.Context) error {
 
 		// try reconnecting to the explicit peer
 		log.Printf("Attempting to connect to: %s\n", p.peer)
-		if err := p.connect(ctx, p.peer); err != nil {
-			log.Printf("Error connecting to peer: %s\n", p.peer)
+		if statusCode, err := p.connect(ctx, p.peer); err != nil {
+			log.Printf("Error connecting to peer: %s, status code: %d\n", err, statusCode)
 			return err
 		}
 		log.Printf("Connected to peer: %s\n", p.peer)
@@ -362,8 +362,8 @@ func (p *PeerManager) connectToPeers(ctx context.Context) error {
 			}
 			tried[addr] = true
 			log.Printf("Attempting to connect to: %s\n", addr)
-			if err := p.connect(ctx, addr); err != nil {
-				log.Printf("Error connecting to peer: %s\n", err)
+			if statusCode, err := p.connect(ctx, addr); err != nil {
+				log.Printf("Error connecting to peer: %s, status code: %d\n", err, statusCode)
 				if ctx.Err() != nil {
 					// quit trying connections if the parent context was cancelled
 					return ctx.Err()
@@ -381,11 +381,11 @@ func (p *PeerManager) connectToPeers(ctx context.Context) error {
 }
 
 // Connect to a peer
-func (p *PeerManager) connect(ctx context.Context, addr string) error {
+func (p *PeerManager) connect(ctx context.Context, addr string) (int, error) {
 	peer := NewPeer(nil, p.genesisID, p.peerStore, p.blockStore, p.ledger, p.processor, p.txQueue, p.blockQueue, p.addrChan)
 
 	if ok := p.addToOutboundSet(addr, peer); !ok {
-		return fmt.Errorf("Too many peer connections")
+		return 0, fmt.Errorf("Too many peer connections")
 	}
 
 	var myAddress string
@@ -395,9 +395,10 @@ func (p *PeerManager) connect(ctx context.Context, addr string) error {
 	}
 
 	// connect to the peer
-	if err := peer.Connect(ctx, addr, p.peerNonce, myAddress); err != nil {
+	statusCode, err := peer.Connect(ctx, addr, p.peerNonce, myAddress)
+	if err != nil {
 		p.removeFromOutboundSet(addr)
-		return err
+		return statusCode, err
 	}
 
 	peer.OnClose(func() {
@@ -405,7 +406,7 @@ func (p *PeerManager) connect(ctx context.Context, addr string) error {
 	})
 	peer.Run()
 
-	return nil
+	return statusCode, nil
 }
 
 // Check to see if it's time to start accepting connections and do so if necessary
@@ -441,6 +442,23 @@ func (p *PeerManager) listenForPeers(ctx context.Context) bool {
 		break
 	case <-ctx.Done():
 		break
+	}
+
+	if !p.open {
+		// if we don't yet think we're open try connecting to ourself to see if maybe we are.
+		// if the user manually forwarded a port on their router this is when we'd find out.
+		log.Println("Checking to see if we're open for public inbound connections")
+		myAddr := p.myIP + ":" + strconv.Itoa(p.port)
+		if _, err := p.peerStore.Store(myAddr); err == nil {
+			if statusCode, _ := p.connect(ctx, myAddr); statusCode == http.StatusLoopDetected {
+				p.open = true
+			}
+		}
+		if p.open {
+			log.Println("Open for public inbound connections")
+		} else {
+			log.Println("Not open for public inbound connections")
+		}
 	}
 	return true
 }
