@@ -711,6 +711,10 @@ func (p *Peer) run() {
 					log.Printf("Error: %s, from: %s\n", err, p.conn.RemoteAddr())
 					return
 				}
+				if sw.Header == nil {
+					log.Printf("Error: received nil header, from: %s\n", p.conn.RemoteAddr())
+					return
+				}
 				log.Printf("Received submit_work message, from: %s\n", p.conn.RemoteAddr())
 				submitWorkChan <- sw
 
