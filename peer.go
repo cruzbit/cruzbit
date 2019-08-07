@@ -1593,8 +1593,6 @@ func (p *Peer) updateWorkBlock(id TransactionID, tx *Transaction) error {
 	err := p.workBlock.AddTransaction(id, tx)
 	if err != nil {
 		log.Printf("Error adding new transaction %s to block: %s\n", id, err)
-		// abandon the block
-		p.workBlock = nil
 		m.Body = WorkMessage{WorkID: p.workID, Error: err.Error()}
 	} else {
 		// send out the new work
@@ -1619,14 +1617,18 @@ func (p *Peer) onSubmitWork(sw SubmitWorkMessage) {
 
 	if err != nil {
 		log.Printf("Error computing block ID: %s, from: %s\n", err, p.conn.RemoteAddr())
+	} else if sw.WorkID == 0 {
+		err = fmt.Errorf("No work ID set")
+		log.Printf("%s, from: %s\n", err.Error(), p.conn.RemoteAddr())
 	} else if sw.WorkID != p.workID {
 		err = fmt.Errorf("Expected work ID %d, found %d", p.workID, sw.WorkID)
 		log.Printf("%s, from: %s\n", err.Error(), p.conn.RemoteAddr())
 	} else {
 		p.workBlock.Header = sw.Header
 		err = p.processor.ProcessBlock(id, p.workBlock, p.conn.RemoteAddr().String())
-		log.Printf("Error processing work block: %s, for: %s\n", err, p.conn.RemoteAddr())
-		p.workBlock = nil
+		if err != nil {
+			log.Printf("Error processing work block: %s, from: %s\n", err, p.conn.RemoteAddr())
+		}
 	}
 
 	if err != nil {
