@@ -1626,7 +1626,6 @@ func (p *Peer) onSubmitWork(sw SubmitWorkMessage) {
 		p.workBlock.Header = sw.Header
 		err = p.processor.ProcessBlock(id, p.workBlock, p.conn.RemoteAddr().String())
 		log.Printf("Error processing work block: %s, for: %s\n", err, p.conn.RemoteAddr())
-		p.workBlock = nil
 	}
 
 	if err != nil {
