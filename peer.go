@@ -247,6 +247,10 @@ func (p *Peer) run() {
 		tickerGetPeerAddresses := time.NewTicker(getPeerAddressesPeriod)
 		defer tickerGetPeerAddresses.Stop()
 
+		// check to see if we need to update work for miners
+		tickerUpdateWorkCheck := time.NewTicker(30 * time.Second)
+		defer tickerUpdateWorkCheck.Stop()
+
 		// update the peer store on disconnection
 		if p.outbound {
 			defer p.peerStore.OnDisconnect(peerAddr)
@@ -326,9 +330,6 @@ func (p *Peer) run() {
 				}
 
 			case newTx := <-newTxChan:
-				// update work if necessary
-				p.updateWorkBlock(newTx.TransactionID, newTx.Transaction)
-
 				if newTx.Source == p.conn.RemoteAddr().String() {
 					// this is who sent it to us
 					break
@@ -403,6 +404,25 @@ func (p *Peer) run() {
 				if err := p.conn.WriteJSON(m); err != nil {
 					log.Printf("Error sending get_peer_addresses: %s, to: %s\n", err, p.conn.RemoteAddr())
 					p.conn.Close()
+				}
+
+			case <-tickerUpdateWorkCheck.C:
+				if p.workBlock == nil {
+					// peer doesn't have work
+					break
+				}
+				txCount := len(p.workBlock.Transactions)
+				if txCount == MAX_TRANSACTIONS_TO_INCLUDE_PER_BLOCK {
+					// already at capacity
+					break
+				}
+				if txCount-1 != p.txQueue.Len() {
+					tipID, tipHeader, _, err := getChainTipHeader(p.ledger, p.blockStore)
+					if err != nil {
+						log.Printf("Error reading chain tip header: %s\n", err)
+						break
+					}
+					p.createNewWorkBlock(*tipID, tipHeader)
 				}
 			}
 		}
@@ -1571,42 +1591,6 @@ func (p *Peer) createNewWorkBlock(tipID BlockID, tipHeader *BlockHeader) error {
 		p.conn.Close()
 		return err
 	}
-	return err
-}
-
-// Add the transaction to the current work block for the mining peer. Called from the writer goroutine loop.
-func (p *Peer) updateWorkBlock(id TransactionID, tx *Transaction) error {
-	if p.workBlock == nil {
-		// peer doesn't want work
-		return nil
-	}
-
-	if MAX_TRANSACTIONS_TO_INCLUDE_PER_BLOCK != 0 &&
-		len(p.workBlock.Transactions) >= MAX_TRANSACTIONS_TO_INCLUDE_PER_BLOCK {
-		log.Printf("Per-block transaction limit hit (%d)\n", len(p.workBlock.Transactions))
-		return nil
-	}
-
-	m := Message{Type: "work"}
-
-	// add the transaction to the block (it updates the coinbase fee)
-	err := p.workBlock.AddTransaction(id, tx)
-	if err != nil {
-		log.Printf("Error adding new transaction %s to block: %s\n", id, err)
-		m.Body = WorkMessage{WorkID: p.workID, Error: err.Error()}
-	} else {
-		// send out the new work
-		p.workID = rand.Int31()
-		m.Body = WorkMessage{WorkID: p.workID, Header: p.workBlock.Header, MinTime: p.medianTimestamp + 1}
-	}
-
-	p.conn.SetWriteDeadline(time.Now().Add(writeWait))
-	if err := p.conn.WriteJSON(m); err != nil {
-		log.Printf("Write error: %s, to: %s\n", err, p.conn.RemoteAddr())
-		p.conn.Close()
-		return err
-	}
-
 	return err
 }
 
