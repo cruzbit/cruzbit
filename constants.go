@@ -3,6 +3,12 @@
 
 package cruzbit
 
+import (
+	"encoding/hex"
+	"math/big"
+	"sync"
+)
+
 // the below values affect ledger consensus and come directly from bitcoin.
 // we could have played with these but we're introducing significant enough changes
 // already IMO, so let's keep the scope of this experiment as small as we can
@@ -46,6 +52,9 @@ const MAX_MEMO_LENGTH = 100 // bytes (ascii/utf8 only)
 // given our JSON protocol we should respect Javascript's Number.MAX_SAFE_INTEGER value
 const MAX_NUMBER int64 = 1<<53 - 1
 
+// DoS prevention mechanism. this amount of work was reached as of height 18144
+const MIN_CHAIN_WORK = "0000000000000000000000000000000000000000000000000187af7c51ca9b26"
+
 // the below values only affect peering behavior and do not affect ledger consensus
 
 const DEFAULT_CRUZBIT_PORT = 8831
@@ -70,3 +79,22 @@ const MAX_TRANSACTION_QUEUE_LENGTH = MAX_TRANSACTIONS_TO_INCLUDE_PER_BLOCK * 10
 const MIN_FEE_CRUZBITS = 1000000 // 0.01 cruz
 
 const MIN_AMOUNT_CRUZBITS = 1000000 // 0.01 cruz
+
+// handle converting MIN_CHAIN_WORK to a big.Int
+var minChainWork *big.Int
+var minChainWorkLock sync.Mutex
+
+func GetMinChainWork() *big.Int {
+	if minChainWork == nil {
+		minChainWorkLock.Lock()
+		if minChainWork == nil {
+			minChainWorkBytes, err := hex.DecodeString(MIN_CHAIN_WORK)
+			if err != nil {
+				panic(err)
+			}
+			minChainWork = new(big.Int).SetBytes(minChainWorkBytes)
+		}
+		minChainWorkLock.Unlock()
+	}
+	return minChainWork
+}

@@ -542,7 +542,11 @@ func (p *Peer) run() {
 					log.Printf("Error: received nil block, from: %s\n", p.conn.RemoteAddr())
 					return
 				}
-				ok, err := p.onBlock(b.Block, outChan)
+				if b.Block.Header == nil {
+					log.Printf("Error: received nil block header, from: %s\n", p.conn.RemoteAddr())
+					return
+				}
+				ok, err := p.onBlock(b.Block, ibd, outChan)
 				if err != nil {
 					log.Printf("Error: %s, from: %s\n", err, p.conn.RemoteAddr())
 					break
@@ -858,7 +862,7 @@ func (p *Peer) getBlock(id BlockID, outChan chan<- Message) error {
 }
 
 // Handle receiving a block from a peer. Returns true if the block was newly processed and accepted.
-func (p *Peer) onBlock(block *Block, outChan chan<- Message) (bool, error) {
+func (p *Peer) onBlock(block *Block, ibd bool, outChan chan<- Message) (bool, error) {
 	// the message has the ID in it but we can't trust that.
 	// it's provided as convenience for trusted peering relationships only
 	id, err := block.ID()
@@ -873,6 +877,17 @@ func (p *Peer) onBlock(block *Block, outChan chan<- Message) (bool, error) {
 		// disconnect misbehaving peer
 		p.conn.Close()
 		return false, fmt.Errorf("Received unrequested block")
+	}
+
+	// don't process blocks with less than MIN_CHAIN_WORK.
+	// this doesn't validate the chain work. so if it's a lie we won't find out until processing
+	// the block but we still won't save it.
+	if ibd == false && block.Header.ChainWork.GetBigInt().Cmp(GetMinChainWork()) < 0 {
+		p.conn.Close()
+		p.localInflightQueue.Remove(id, "")
+		p.globalInflightQueue.Remove(id, p.conn.RemoteAddr().String())
+		return false, fmt.Errorf("Block %s has too little chain work to process: %s\n",
+			id, block.Header.ChainWork)
 	}
 
 	var accepted bool
