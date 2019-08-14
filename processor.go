@@ -466,6 +466,11 @@ func checkBlock(id BlockID, block *Block, now int64) error {
 		return fmt.Errorf("Height value is invalid, block %s", id)
 	}
 
+	// check against known checkpoints
+	if err := CheckpointCheck(id, block.Header.Height); err != nil {
+		return err
+	}
+
 	// sanity check transaction count
 	if block.Header.TransactionCount < 0 {
 		return fmt.Errorf("Negative transaction count in header of block %s", id)

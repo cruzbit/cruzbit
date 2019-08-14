@@ -775,7 +775,7 @@ func IsInitialBlockDownload(ledger Ledger, blockStore BlockStorage) (bool, int64
 	if tipHeader == nil {
 		return true, 0, nil
 	}
-	if tipHeader.ChainWork.GetBigInt().Cmp(GetMinChainWork()) < 0 {
+	if CheckpointsEnabled && tipHeader.Height < LatestCheckpointHeight {
 		return true, tipHeader.Height, nil
 	}
 	return tipHeader.Time < (time.Now().Unix() - MAX_TIP_AGE), tipHeader.Height, nil
