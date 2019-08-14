@@ -879,15 +879,11 @@ func (p *Peer) onBlock(block *Block, ibd bool, outChan chan<- Message) (bool, er
 		return false, fmt.Errorf("Received unrequested block")
 	}
 
-	// don't process blocks with less than MIN_CHAIN_WORK.
-	// this doesn't validate the chain work. so if it's a lie we won't find out until processing
-	// the block but we still won't save it.
-	if ibd == false && block.Header.ChainWork.GetBigInt().Cmp(GetMinChainWork()) < 0 {
+	// don't process low difficulty blocks
+	if ibd == false && CheckpointsEnabled && block.Header.Height < LatestCheckpointHeight {
 		p.conn.Close()
-		p.localInflightQueue.Remove(id, "")
-		p.globalInflightQueue.Remove(id, p.conn.RemoteAddr().String())
-		return false, fmt.Errorf("Block %s has too little chain work to process: %s\n",
-			id, block.Header.ChainWork)
+		return false, fmt.Errorf("Block %s height %d less than latest checkpoint height %d",
+			id, block.Header.Height, LatestCheckpointHeight)
 	}
 
 	var accepted bool
@@ -914,8 +910,6 @@ func (p *Peer) onBlock(block *Block, ibd bool, outChan chan<- Message) (bool, er
 		if err := p.processor.ProcessBlock(id, block, p.conn.RemoteAddr().String()); err != nil {
 			// disconnect a peer that sends us a bad block
 			p.conn.Close()
-			p.localInflightQueue.Remove(id, "")
-			p.globalInflightQueue.Remove(id, p.conn.RemoteAddr().String())
 			return false, err
 		}
 		// newly accepted block
