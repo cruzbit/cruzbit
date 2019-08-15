@@ -169,6 +169,7 @@ func main() {
 			{Text: "clearconf", Description: "Clear all pending transaction confirmation notifications"},
 			{Text: "rewards", Description: "Show immature block rewards for all public keys"},
 			{Text: "verify", Description: "Verify the private key is decryptable and intact for all public keys displayed with 'listkeys'"},
+			{Text: "export", Description: "Dump all of the wallet's public-private key pairs to a text file"},
 			{Text: "quit", Description: "Quit this wallet session"},
 		}
 		return prompt.FilterHasPrefix(s, d.GetWordBeforeCursor(), true)
@@ -454,6 +455,37 @@ func main() {
 			}
 			fmt.Printf("%d key(s) verified and %d key(s) potentially corrupt\n",
 				verified, corrupt)
+
+		case "export":
+			pubKeys, err := wallet.GetKeys()
+			if err != nil {
+				fmt.Printf("Error: %s\n", err)
+				break
+			}
+			if len(pubKeys) == 0 {
+				fmt.Printf("No private keys found\n")
+				break
+			}
+			name := "export.txt"
+			f, err := os.Create(name)
+			if err != nil {
+				fmt.Printf("Error: %s\n", err)
+				break
+			}
+			count := 0
+			for _, pubKey := range pubKeys {
+				private, err := wallet.GetPrivateKey(pubKey)
+				if err != nil {
+					break
+				}
+				pair := fmt.Sprintf("%s\n%s\n\n",
+					base64.StdEncoding.EncodeToString(pubKey[:]),
+					base64.StdEncoding.EncodeToString(private[:]))
+				f.WriteString(pair)
+				count += 1
+			}
+			f.Close()
+			fmt.Printf("%d wallet key pairs saved to '%s'\n", count, aurora.Bold(name))
 
 		case "quit":
 			wallet.Shutdown()

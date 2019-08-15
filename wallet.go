@@ -156,6 +156,15 @@ func (w *Wallet) GetKeys() ([]ed25519.PublicKey, error) {
 	return pubKeys, nil
 }
 
+// Retrieve a private key for a given public key
+func (w *Wallet) GetPrivateKey(pubKey ed25519.PublicKey) (ed25519.PrivateKey, error) {
+	privKeyDbKey, err := encodePrivateKeyDbKey(pubKey)
+	if err != nil {
+		return nil, err
+	}
+	return privKeyDbKey, nil
+}
+
 // Connect connects to a peer for transaction history, balance information, and sending new transactions.
 // The threat model assumes the peer the wallet is speaking to is not an adversary.
 func (w *Wallet) Connect(addr string, genesisID BlockID, tlsVerify bool) error {
