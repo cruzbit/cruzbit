@@ -44,6 +44,11 @@ func main() {
 	if len(*peerPtr) == 0 {
 		log.Fatal("Peer address required")
 	}
+	// add default port, if one was not supplied
+	i := strings.LastIndex(*peerPtr, ":")
+	if i < 0 {
+		*peerPtr = *peerPtr + ":" + strconv.Itoa(DEFAULT_CRUZBIT_PORT)
+	}
 
 	// load genesis block
 	var genesisBlock Block
