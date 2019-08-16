@@ -55,6 +55,13 @@ func main() {
 		log.Fatal("-tlscert argument missing")
 	}
 
+	if len(*peerPtr) != 0 {
+		// add default port, if one was not supplied
+		if i := strings.LastIndex(*peerPtr, ":"); i < 0 {
+			*peerPtr = *peerPtr + ":" + strconv.Itoa(DEFAULT_CRUZBIT_PORT)
+		}
+	}
+
 	var pubKeys []ed25519.PublicKey
 	if *numMinersPtr > 0 {
 		if len(*pubKeyPtr) == 0 && len(*keyFilePtr) == 0 {
@@ -183,12 +190,6 @@ func main() {
 		} else {
 			log.Println("Successfully enabled forwarding")
 		}
-	}
-
-	// add default port, if one was not supplied
-	i := strings.LastIndex(*peerPtr, ":")
-	if i < 0 {
-		*peerPtr = *peerPtr + ":" + strconv.Itoa(DEFAULT_CRUZBIT_PORT)
 	}
 
 	// manage peer connections
