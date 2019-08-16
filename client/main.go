@@ -14,6 +14,8 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strconv"
+	"strings"
 	"time"
 
 	. "github.com/cruzbit/cruzbit"
@@ -181,6 +183,12 @@ func main() {
 		} else {
 			log.Println("Successfully enabled forwarding")
 		}
+	}
+
+	// add default port, if one was not supplied
+	i := strings.LastIndex(*peerPtr, ":")
+	if i < 0 {
+		*peerPtr = *peerPtr + ":" + strconv.Itoa(DEFAULT_CRUZBIT_PORT)
 	}
 
 	// manage peer connections
