@@ -457,6 +457,18 @@ func main() {
 				verified, corrupt)
 
 		case "export":
+			fmt.Println(aurora.BrightRed("WARNING"), aurora.Bold(": Anyone with access to a wallet's " +
+				"private key(s) has full control of the funds in the wallet."))
+			confirm, err := promptForConfirmation("Are you sure you wish to proceed?", false,
+				bufio.NewReader(os.Stdin))
+			if err != nil {
+				fmt.Printf("Error: %s\n", err)
+				break
+			}
+			if !confirm {
+				fmt.Println("Aborting export")
+				break
+			}
 			pubKeys, err := wallet.GetKeys()
 			if err != nil {
 				fmt.Printf("Error: %s\n", err)
@@ -476,13 +488,14 @@ func main() {
 			for _, pubKey := range pubKeys {
 				private, err := wallet.GetPrivateKey(pubKey)
 				if err != nil {
-					break
+					fmt.Printf("Couldn't get private key for public key: %s; omitting from export\n", pubKey)
+					continue
 				}
-				pair := fmt.Sprintf("%s\n%s\n\n",
+				pair := fmt.Sprintf("%s,%s\n",
 					base64.StdEncoding.EncodeToString(pubKey[:]),
 					base64.StdEncoding.EncodeToString(private[:]))
 				f.WriteString(pair)
-				count += 1
+				count++
 			}
 			f.Close()
 			fmt.Printf("%d wallet key pairs saved to '%s'\n", count, aurora.Bold(name))
@@ -602,6 +615,26 @@ func promptForNumber(prompt string, rightJustify int, reader *bufio.Reader) (int
 		return 0, err
 	}
 	return strconv.Atoi(strings.TrimSpace(text))
+}
+
+func promptForConfirmation(prompt string, defaultResponse bool, reader *bufio.Reader) (bool, error) {
+	defaultPrompt := " [y/N]"
+	if defaultResponse {
+		defaultPrompt = " [Y/n]"
+	}
+	fmt.Printf("%v:", aurora.Bold(prompt+defaultPrompt))
+	text, err := reader.ReadString('\n')
+	if err != nil {
+		return false, err
+	}
+	text = strings.ToLower(strings.TrimSpace(text))
+	switch text {
+		case "y", "yes":
+			return true, nil
+		case "n", "no":
+			return false, nil
+	}
+	return defaultResponse, nil
 }
 
 func promptForTransactionID(prompt string, rightJustify int, reader *bufio.Reader) (TransactionID, error) {
