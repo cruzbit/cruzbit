@@ -1183,7 +1183,9 @@ func (p *Peer) onGetBalances(pubKeys []ed25519.PublicKey, outChan chan<- Message
 
 	i := 0
 	for pk, balance := range balances {
-		bm.Balances[i] = PublicKeyBalance{PublicKey: ed25519.PublicKey(pk[:]), Balance: balance}
+		var pubKey [ed25519.PublicKeySize]byte
+		copy(pubKey[:], pk[:])
+		bm.Balances[i] = PublicKeyBalance{PublicKey: ed25519.PublicKey(pubKey[:]), Balance: balance}
 		i++
 	}
 
