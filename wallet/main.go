@@ -627,7 +627,7 @@ func promptForConfirmation(prompt string, defaultResponse bool, reader *bufio.Re
 	if defaultResponse {
 		defaultPrompt = " [Y/n]"
 	}
-	fmt.Printf("%v:", aurora.Bold(prompt+defaultPrompt))
+	fmt.Printf("%v: ", aurora.Bold(prompt+defaultPrompt))
 	text, err := reader.ReadString('\n')
 	if err != nil {
 		return false, err
