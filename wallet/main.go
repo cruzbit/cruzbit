@@ -462,7 +462,7 @@ func main() {
 				verified, corrupt)
 
 		case "export":
-			fmt.Println(aurora.BrightRed("WARNING"), aurora.Bold(": Anyone with access to a wallet's " +
+			fmt.Println(aurora.BrightRed("WARNING"), aurora.Bold(": Anyone with access to a wallet's "+
 				"private key(s) has full control of the funds in the wallet."))
 			confirm, err := promptForConfirmation("Are you sure you wish to proceed?", false,
 				bufio.NewReader(os.Stdin))
@@ -634,10 +634,10 @@ func promptForConfirmation(prompt string, defaultResponse bool, reader *bufio.Re
 	}
 	text = strings.ToLower(strings.TrimSpace(text))
 	switch text {
-		case "y", "yes":
-			return true, nil
-		case "n", "no":
-			return false, nil
+	case "y", "yes":
+		return true, nil
+	case "n", "no":
+		return false, nil
 	}
 	return defaultResponse, nil
 }
