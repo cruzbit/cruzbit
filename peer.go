@@ -896,6 +896,7 @@ func (p *Peer) onBlock(block *Block, ibd bool, outChan chan<- Message) (bool, er
 		p.ignoreBlocks[id] = true
 		if len(p.ignoreBlocks) > maxBlocksPerInv {
 			// they're intentionally sending us bad blocks
+			log.Printf("Disconnecting %s, max ignore list size exceeded\n", p.conn.RemoteAddr().String())
 			p.conn.Close()
 		}
 		return false, fmt.Errorf("Block %s height %d less than latest checkpoint height %d",
