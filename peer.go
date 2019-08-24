@@ -34,6 +34,7 @@ type Peer struct {
 	localDownloadQueue            *BlockQueue // peer-local download queue
 	localInflightQueue            *BlockQueue // peer-local inflight queue
 	globalInflightQueue           *BlockQueue // global inflight queue
+	ignoreBlocks                  map[BlockID]bool
 	continuationBlockID           BlockID
 	lastPeerAddressesReceivedTime time.Time
 	filterLock                    sync.RWMutex
@@ -71,6 +72,7 @@ func NewPeer(conn *websocket.Conn, genesisID BlockID, peerStore PeerStorage,
 		localDownloadQueue:  NewBlockQueue(),
 		localInflightQueue:  NewBlockQueue(),
 		globalInflightQueue: blockQueue,
+		ignoreBlocks:        make(map[BlockID]bool),
 		addrChan:            addrChan,
 	}
 	peer.updateReadLimit()
@@ -762,6 +764,12 @@ func (p *Peer) onInvBlock(id BlockID, index, length int, outChan chan<- Message)
 			length, maxBlocksPerInv)
 	}
 
+	// is it on the ignore list?
+	if p.ignoreBlocks[id] {
+		log.Printf("Ignoring block %s, from: %s\n", id, p.conn.RemoteAddr())
+		return nil
+	}
+
 	// do we have it queued or inflight already?
 	if p.localDownloadQueue.Exists(id) || p.localInflightQueue.Exists(id) {
 		log.Printf("Block %s is already queued or inflight for download, from: %s\n",
@@ -881,7 +889,15 @@ func (p *Peer) onBlock(block *Block, ibd bool, outChan chan<- Message) (bool, er
 
 	// don't process low difficulty blocks
 	if ibd == false && CheckpointsEnabled && block.Header.Height < LatestCheckpointHeight {
-		p.conn.Close()
+		// don't disconnect them. they may need us to find out about the real chain
+		p.localInflightQueue.Remove(id, "")
+		p.globalInflightQueue.Remove(id, p.conn.RemoteAddr().String())
+		// ignore future inv_blocks for this block
+		p.ignoreBlocks[id] = true
+		if len(p.ignoreBlocks) > maxBlocksPerInv {
+			// they're intentionally sending us bad blocks
+			p.conn.Close()
+		}
 		return false, fmt.Errorf("Block %s height %d less than latest checkpoint height %d",
 			id, block.Header.Height, LatestCheckpointHeight)
 	}
