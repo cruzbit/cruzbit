@@ -14,6 +14,9 @@ type PeerStorage interface {
 	// GetSince returns some peers to tell others about last active less than "when" ago.
 	GetSince(count int, when int64) ([]string, error)
 
+	// Delete is called to explicitly remove a peer address from storage.
+	Delete(addr string) error
+
 	// OnConnectAttempt is called prior to attempting to connect to the peer.
 	OnConnectAttempt(addr string) error
 

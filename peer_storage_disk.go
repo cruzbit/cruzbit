@@ -170,6 +170,18 @@ func (p *PeerStorageDisk) GetSince(count int, when int64) ([]string, error) {
 	return addrs, nil
 }
 
+// Delete is called to explicitly remove a peer address from storage.
+func (p *PeerStorageDisk) Delete(addr string) error {
+	info, err := getPeerInfo(addr, p.db)
+	if err != nil {
+		return err
+	}
+	if info == nil {
+		return fmt.Errorf("Peer info not found for: %s", addr)
+	}
+	return p.deletePeer(addr, info.LastAttempt, info.LastSuccess)
+}
+
 // OnConnectAttempt is called prior to attempting to connect to the peer.
 func (p *PeerStorageDisk) OnConnectAttempt(addr string) error {
 	info, err := getPeerInfo(addr, p.db)

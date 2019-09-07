@@ -38,6 +38,7 @@ type PeerManager struct {
 	accepting         bool
 	irc               bool
 	dnsseed           bool
+	banMap            map[string]bool
 	inPeers           map[string]*Peer
 	inPeerCountByHost map[string]int
 	outPeers          map[string]*Peer
@@ -58,7 +59,7 @@ func NewPeerManager(
 	genesisID BlockID, peerStore PeerStorage, blockStore BlockStorage,
 	ledger Ledger, processor *Processor, txQueue TransactionQueue,
 	dataDir, myExternalIP, peer, certPath, keyPath string,
-	port, inboundLimit int, accept, irc, dnsseed bool) *PeerManager {
+	port, inboundLimit int, accept, irc, dnsseed bool, banMap map[string]bool) *PeerManager {
 
 	// compute and save these
 	var privateIPBlocks []*net.IPNet
@@ -101,6 +102,7 @@ func NewPeerManager(
 		accept:            accept,
 		irc:               irc,
 		dnsseed:           dnsseed,
+		banMap:            banMap,
 		inPeers:           make(map[string]*Peer),
 		inPeerCountByHost: make(map[string]int),
 		outPeers:          make(map[string]*Peer),
@@ -197,6 +199,12 @@ func (p *PeerManager) run() {
 			// parse, resolve and validate the address
 			host, port, err := p.parsePeerAddress(addr)
 			if err != nil {
+				continue
+			}
+
+			// is it banned?
+			if p.banMap[host] {
+				log.Printf("Ignoring banned host: %s\n", host)
 				continue
 			}
 
@@ -361,6 +369,17 @@ func (p *PeerManager) connectToPeers(ctx context.Context) error {
 				return nil
 			}
 			tried[addr] = true
+
+			// is it banned?
+			host, _, _ := net.SplitHostPort(addr)
+			if p.banMap[host] {
+				log.Printf("Skipping and removing banned host: %s\n", host)
+				if err := p.peerStore.Delete(addr); err != nil {
+					log.Printf("Error removing peer from storage: %s\n", err)
+				}
+				continue
+			}
+
 			log.Printf("Attempting to connect to: %s\n", addr)
 			if statusCode, _, err := p.connect(ctx, addr); err != nil {
 				log.Printf("Error connecting to peer: %s, status code: %d\n", err, statusCode)
@@ -471,6 +490,14 @@ func (p *PeerManager) listenForPeers(ctx context.Context) bool {
 func (p *PeerManager) acceptConnections() {
 	// handle incoming connection upgrade requests
 	peerHandler := func(w http.ResponseWriter, r *http.Request) {
+		// is it banned?
+		host, _, _ := net.SplitHostPort(r.RemoteAddr)
+		if p.banMap[host] {
+			log.Printf("Rejecting connection from banned host: %s\n", r.RemoteAddr)
+			w.WriteHeader(http.StatusForbidden)
+			return
+		}
+
 		// check the connection limit for this peer address
 		if !p.checkHostConnectionLimit(r.RemoteAddr) {
 			log.Printf("Too many connections from this peer's host: %s\n", r.RemoteAddr)

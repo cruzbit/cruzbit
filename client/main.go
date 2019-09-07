@@ -43,6 +43,7 @@ func main() {
 	tlsCertPtr := flag.String("tlscert", "", "Path to a file containing a PEM-encoded X.509 certificate to use with TLS")
 	tlsKeyPtr := flag.String("tlskey", "", "Path to a file containing a PEM-encoded private key to use with TLS")
 	inLimitPtr := flag.Int("inlimit", MAX_INBOUND_PEER_CONNECTIONS, "Limit for the number of inbound peer connections.")
+	banListPtr := flag.String("banlist", "", "Path to a file containing a list of banned host addresses")
 	flag.Parse()
 
 	if len(*dataDirPtr) == 0 {
@@ -62,6 +63,17 @@ func main() {
 		}
 	}
 
+	// load any ban list
+	banMap := make(map[string]bool)
+	if len(*banListPtr) != 0 {
+		var err error
+		banMap, err = loadBanList(*banListPtr)
+		if err != nil {
+			log.Fatal(err)
+		}
+	}
+
+	// load public keys to mine to
 	var pubKeys []ed25519.PublicKey
 	if *numMinersPtr > 0 {
 		if len(*pubKeyPtr) == 0 && len(*keyFilePtr) == 0 {
@@ -195,7 +207,7 @@ func main() {
 	// manage peer connections
 	peerManager := NewPeerManager(genesisID, peerStore, blockStore, ledger, processor, txQueue,
 		*dataDirPtr, myExternalIP, *peerPtr, *tlsCertPtr, *tlsKeyPtr,
-		*portPtr, *inLimitPtr, !*noAcceptPtr, !*noIrcPtr, *dnsSeedPtr)
+		*portPtr, *inLimitPtr, !*noAcceptPtr, !*noIrcPtr, *dnsSeedPtr, banMap)
 	peerManager.Run()
 
 	// shutdown on ctrl-c
@@ -284,4 +296,21 @@ func loadPublicKeys(pubKeyEncoded, keyFile string) ([]ed25519.PublicKey, error) 
 		pubKeys = append(pubKeys, ed25519.PublicKey(pubKeyBytes))
 	}
 	return pubKeys, nil
+}
+
+func loadBanList(banListFile string) (map[string]bool, error) {
+	file, err := os.Open(banListFile)
+	if err != nil {
+		return nil, err
+	}
+	banMap := make(map[string]bool)
+	defer file.Close()
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		banMap[strings.TrimSpace(scanner.Text())] = true
+	}
+	if err := scanner.Err(); err != nil {
+		return nil, err
+	}
+	return banMap, nil
 }
