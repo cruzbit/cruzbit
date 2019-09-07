@@ -44,3 +44,4 @@ With the above specified options, the client will:
 - **tlscert** - Path to a file containing a PEM-encoded X.509 certificate to use with TLS.
 - **tlskey** - Path to a file containing a PEM-encoded private key to use with TLS.
 - **inlimit** - Limit for the number of inbound peer connections. Default is 128.
+- **banlist** - Path to a file containing a list of banned host addresses.
