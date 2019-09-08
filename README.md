@@ -1,4 +1,4 @@
-![cruzbit](https://user-images.githubusercontent.com/51346587/64493622-370ace00-d237-11e9-98c5-547641054e0f.png)
+![cruzbit](https://user-images.githubusercontent.com/51346587/64493876-ab933c00-d23a-11e9-8c9a-6602c0197d2e.png)
 
 A simple decentralized peer-to-peer ledger implementation
 
