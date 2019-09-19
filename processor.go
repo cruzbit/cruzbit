@@ -764,10 +764,10 @@ func computeTargetBitcoinCash(prevHeader *BlockHeader, blockStore BlockStorage, 
 	// "In order to avoid difficulty cliffs, we bound the amplitude of the
 	// adjustment we are going to do to a factor in [0.5, 2]." - Bitcoin-ABC
 	actualTimespan := prevHeader.Time - firstHeader.Time
-	if actualTimespan > 288*TARGET_SPACING {
-		actualTimespan = 288 * TARGET_SPACING
-	} else if actualTimespan < 72*TARGET_SPACING {
-		actualTimespan = 72 * TARGET_SPACING
+	if actualTimespan > 2*RETARGET_SMA_WINDOW*TARGET_SPACING {
+		actualTimespan = 2 * RETARGET_SMA_WINDOW * TARGET_SPACING
+	} else if actualTimespan < (RETARGET_SMA_WINDOW/2)*TARGET_SPACING {
+		actualTimespan = (RETARGET_SMA_WINDOW / 2) * TARGET_SPACING
 	}
 
 	workInt.Div(workInt, big.NewInt(actualTimespan))
