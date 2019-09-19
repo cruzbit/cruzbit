@@ -248,12 +248,12 @@ func (m *Miner) Shutdown() {
 func (m *Miner) createNextBlock(tipID BlockID, tipHeader *BlockHeader) (*Block, error) {
 	log.Printf("Miner %d mining new block from current tip %s\n", m.num, tipID)
 	pubKey := m.pubKeys[m.keyIndex]
-	return createNextBlock(tipID, tipHeader, m.txQueue, m.blockStore, pubKey, m.memo)
+	return createNextBlock(tipID, tipHeader, m.txQueue, m.blockStore, m.ledger, pubKey, m.memo)
 }
 
 // Called by the miner as well as the peer to support get_work.
 func createNextBlock(tipID BlockID, tipHeader *BlockHeader, txQueue TransactionQueue,
-	blockStore BlockStorage, pubKey ed25519.PublicKey, memo string) (*Block, error) {
+	blockStore BlockStorage, ledger Ledger, pubKey ed25519.PublicKey, memo string) (*Block, error) {
 
 	// fetch transactions to confirm from the queue
 	txs := txQueue.Get(MAX_TRANSACTIONS_TO_INCLUDE_PER_BLOCK - 1)
@@ -275,7 +275,7 @@ func createNextBlock(tipID BlockID, tipHeader *BlockHeader, txQueue TransactionQ
 	txs = append([]*Transaction{tx}, txs...)
 
 	// compute the next target
-	newTarget, err := computeTarget(tipHeader, blockStore)
+	newTarget, err := computeTarget(tipHeader, blockStore, ledger)
 	if err != nil {
 		return nil, err
 	}

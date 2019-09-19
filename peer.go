@@ -1600,7 +1600,7 @@ func (p *Peer) createNewWorkBlock(tipID BlockID, tipHeader *BlockHeader) error {
 		p.medianTimestamp = medianTimestamp
 		keyIndex := rand.Intn(len(p.pubKeys))
 		p.workID = rand.Int31()
-		p.workBlock, err = createNextBlock(tipID, tipHeader, p.txQueue, p.blockStore, p.pubKeys[keyIndex], p.memo)
+		p.workBlock, err = createNextBlock(tipID, tipHeader, p.txQueue, p.blockStore, p.ledger, p.pubKeys[keyIndex], p.memo)
 		if err != nil {
 			log.Printf("Error creating next block: %s, for: %s\n", err, p.conn.RemoteAddr())
 		}
