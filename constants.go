@@ -19,9 +19,13 @@ const MAX_FUTURE_SECONDS = 2 * 60 * 60 // 2 hours
 
 const MAX_MONEY = 21000000 * CRUZBITS_PER_CRUZ
 
-const RETARGET_INTERVAL = 2016 // 2 weeks in blocks
+const DIFF_FORK_TARGET = 30240 // block height to switch to new diff algo
+
+const RETARGET_INTERVAL = 144 // 1 day in blocks
 
 const RETARGET_TIME = 1209600 // 2 weeks in seconds
+
+const RETARGET_DEPTH = 2016 // 2 weeks in blocks
 
 const TARGET_SPACING = 600 // every 10 minutes
 

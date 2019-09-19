@@ -681,15 +681,23 @@ func BlockCreationReward(height int64) int64 {
 
 // Compute expected target of the current block
 func computeTarget(prevHeader *BlockHeader, blockStore BlockStorage) (BlockID, error) {
-	if (prevHeader.Height+1)%RETARGET_INTERVAL != 0 {
-		// not 2016th block, use previous block's value
-		return prevHeader.Target, nil
+	if prevHeader.Height < DIFF_FORK_TARGET {
+		// original diff algo
+		if (prevHeader.Height + 1)%RETARGET_DEPTH != 0 {
+			// not 2016th block, use previous block's value
+			return prevHeader.Target, nil
+		}
+	} else {
+		if (prevHeader.Height+1)%RETARGET_INTERVAL != 0 {
+			// not a multiple of 144 blocks, use previous value
+			return prevHeader.Target, nil
+		}
 	}
 
 	// defend against time warp attack
-	blocksToGoBack := RETARGET_INTERVAL - 1
-	if (prevHeader.Height + 1) != RETARGET_INTERVAL {
-		blocksToGoBack = RETARGET_INTERVAL
+	blocksToGoBack := RETARGET_DEPTH - 1
+	if (prevHeader.Height + 1) != RETARGET_DEPTH {
+		blocksToGoBack = RETARGET_DEPTH
 	}
 
 	// walk back to the first block of the interval
