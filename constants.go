@@ -51,7 +51,7 @@ const MAX_MEMO_LENGTH = 100 // bytes (ascii/utf8 only)
 const MAX_NUMBER int64 = 1<<53 - 1
 
 // height at which we switch from bitcoin's difficulty adjustment algorithm to bitcoin cash's algorithm
-const BITCOIN_CASH_RETARGET_ALGORITHM_HEIGHT = 30000
+const BITCOIN_CASH_RETARGET_ALGORITHM_HEIGHT = 28861
 
 // the below values only affect peering behavior and do not affect ledger consensus
 
