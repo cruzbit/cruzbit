@@ -580,7 +580,7 @@ func (p *Processor) acceptBlock(id BlockID, block *Block, now int64, source stri
 	}
 
 	// check declared proof of work is correct
-	target, err := computeTarget(prevHeader, p.blockStore)
+	target, err := computeTarget(prevHeader, p.blockStore, p.ledger)
 	if err != nil {
 		return err
 	}
@@ -680,7 +680,15 @@ func BlockCreationReward(height int64) int64 {
 }
 
 // Compute expected target of the current block
-func computeTarget(prevHeader *BlockHeader, blockStore BlockStorage) (BlockID, error) {
+func computeTarget(prevHeader *BlockHeader, blockStore BlockStorage, ledger Ledger) (BlockID, error) {
+	if prevHeader.Height >= BITCOIN_CASH_RETARGET_ALGORITHM_HEIGHT {
+		return computeTargetBitcoinCash(prevHeader, blockStore, ledger)
+	}
+	return computeTargetBitcoin(prevHeader, blockStore)
+}
+
+// Original target computation
+func computeTargetBitcoin(prevHeader *BlockHeader, blockStore BlockStorage) (BlockID, error) {
 	if (prevHeader.Height+1)%RETARGET_INTERVAL != 0 {
 		// not 2016th block, use previous block's value
 		return prevHeader.Target, nil
@@ -735,6 +743,53 @@ func computeTarget(prevHeader *BlockHeader, blockStore BlockStorage) (BlockID, e
 	}
 
 	return target, nil
+}
+
+// Revised target computation
+func computeTargetBitcoinCash(prevHeader *BlockHeader, blockStore BlockStorage, ledger Ledger) (
+	targetID BlockID, err error) {
+
+	firstID, err := ledger.GetBlockIDForHeight(prevHeader.Height - RETARGET_SMA_WINDOW)
+	if err != nil {
+		return
+	}
+	firstHeader, _, err := blockStore.GetBlockHeader(*firstID)
+	if err != nil {
+		return
+	}
+
+	workInt := new(big.Int).Sub(prevHeader.ChainWork.GetBigInt(), firstHeader.ChainWork.GetBigInt())
+	workInt.Mul(workInt, big.NewInt(TARGET_SPACING))
+
+	// "In order to avoid difficulty cliffs, we bound the amplitude of the
+	// adjustment we are going to do to a factor in [0.5, 2]." - Bitcoin-ABC
+	actualTimespan := prevHeader.Time - firstHeader.Time
+	if actualTimespan > 2*RETARGET_SMA_WINDOW*TARGET_SPACING {
+		actualTimespan = 2 * RETARGET_SMA_WINDOW * TARGET_SPACING
+	} else if actualTimespan < (RETARGET_SMA_WINDOW/2)*TARGET_SPACING {
+		actualTimespan = (RETARGET_SMA_WINDOW / 2) * TARGET_SPACING
+	}
+
+	workInt.Div(workInt, big.NewInt(actualTimespan))
+
+	// T = (2^256 / W) - 1
+	maxInt := new(big.Int).Exp(big.NewInt(2), big.NewInt(256), nil)
+	newTargetInt := new(big.Int).Div(maxInt, workInt)
+	newTargetInt.Sub(newTargetInt, big.NewInt(1))
+
+	// don't go above the initial target
+	initialTargetBytes, err := hex.DecodeString(INITIAL_TARGET)
+	if err != nil {
+		return
+	}
+	maxTargetInt := new(big.Int).SetBytes(initialTargetBytes)
+	if newTargetInt.Cmp(maxTargetInt) > 0 {
+		targetID.SetBigInt(maxTargetInt)
+	} else {
+		targetID.SetBigInt(newTargetInt)
+	}
+
+	return
 }
 
 // Compute the median timestamp of the last NUM_BLOCKS_FOR_MEDIAN_TIMESTAMP blocks

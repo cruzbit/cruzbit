@@ -29,6 +29,10 @@ const NUM_BLOCKS_FOR_MEDIAN_TMESTAMP = 11
 
 const BLOCKS_UNTIL_REWARD_HALVING = 210000 // 4 years in blocks
 
+// the below value affects ledger consensus and comes from bitcoin cash
+
+const RETARGET_SMA_WINDOW = 144 // 1 day in blocks
+
 // the below values affect ledger consensus and are new as of our ledger
 
 const INITIAL_MAX_TRANSACTIONS_PER_BLOCK = 10000 // 16.666... tx/sec, ~4 MBish in JSON
@@ -45,6 +49,9 @@ const MAX_MEMO_LENGTH = 100 // bytes (ascii/utf8 only)
 
 // given our JSON protocol we should respect Javascript's Number.MAX_SAFE_INTEGER value
 const MAX_NUMBER int64 = 1<<53 - 1
+
+// height at which we switch from bitcoin's difficulty adjustment algorithm to bitcoin cash's algorithm
+const BITCOIN_CASH_RETARGET_ALGORITHM_HEIGHT = 28861
 
 // the below values only affect peering behavior and do not affect ledger consensus
 
