@@ -12,6 +12,10 @@ It also stores and manages private keys on behalf of the user and can be used to
 
 The `wallet` application is now in `$HOME/go/bin/wallet`.
 
+### Note to Microsfot Windows users
+
+This software makes use of [ANSI escape codes](https://en.wikipedia.org/wiki/ANSI_escape_code) to provide color and highlighting. Some versions of Microsoft Windows are unable to display these proplerly in its default `cmd.exe` utility. If you are experiencing this issue please have a look at https://github.com/microsoft/Terminal. It should resolve that issue.
+
 ## Basic command line arguments
 
 `wallet -walletdb <path to a directory to store wallet data>`
