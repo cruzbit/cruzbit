@@ -1,6 +1,6 @@
 ![cruzbit](https://user-images.githubusercontent.com/51346587/64493622-370ace00-d237-11e9-98c5-547641054e0f.png)
 
-A simple decentralized peer-to-peer ledger implementation
+A simple decentralized peer-to-peer ledger implementation.
 
 [![Build Status](https://travis-ci.org/cruzbit/cruzbit.svg?branch=master)](https://travis-ci.org/cruzbit/cruzbit)
 
