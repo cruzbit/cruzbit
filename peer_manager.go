@@ -5,6 +5,7 @@ package cruzbit
 
 import (
 	"context"
+	"crypto/tls"
 	"fmt"
 	"log"
 	"math/rand"
@@ -58,7 +59,7 @@ type PeerManager struct {
 func NewPeerManager(
 	genesisID BlockID, peerStore PeerStorage, blockStore BlockStorage,
 	ledger Ledger, processor *Processor, txQueue TransactionQueue,
-	dataDir, myExternalIP, peer, certPath, keyPath string,
+	dataDir, myExternalIP, peer string, tlsCertKeyPair *tls.Certificate,
 	port, inboundLimit int, accept, irc, dnsseed bool, banMap map[string]bool) *PeerManager {
 
 	// compute and save these
@@ -84,6 +85,12 @@ func NewPeerManager(
 		WriteTimeout: 10 * time.Second,
 	}
 
+	// use external certificate, if provided
+	if tlsCertKeyPair.Certificate != nil {
+		log.Println("Using external TLS certificate")
+		server.TLSConfig.Certificates = []tls.Certificate{*tlsCertKeyPair}
+	}
+
 	return &PeerManager{
 		genesisID:         genesisID,
 		peerStore:         peerStore,
@@ -95,8 +102,6 @@ func NewPeerManager(
 		dataDir:           dataDir,
 		myIP:              myExternalIP, // set if upnp was enabled and successful
 		peer:              peer,
-		certPath:          certPath,
-		keyPath:           keyPath,
 		port:              port,
 		inboundLimit:      inboundLimit,
 		accept:            accept,
@@ -567,9 +572,9 @@ func (p *PeerManager) acceptConnections() {
 		peer.Run()
 	}
 
-	var certPath, keyPath string = p.certPath, p.keyPath
-	if len(certPath) == 0 {
-		// generate new certificate and key for tls on each run
+	var certPath, keyPath string
+	if len(p.server.TLSConfig.Certificates) == 0 {
+		// if an external certificate is not provided, generate new certificate and key on each run
 		log.Println("Generating TLS certificate and key")
 		var err error
 		certPath, keyPath, err = generateSelfSignedCertAndKey(p.dataDir)

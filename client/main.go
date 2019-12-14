@@ -5,6 +5,7 @@ package main
 
 import (
 	"bufio"
+	"crypto/tls"
 	"encoding/base64"
 	"encoding/json"
 	"flag"
@@ -49,11 +50,22 @@ func main() {
 	if len(*dataDirPtr) == 0 {
 		log.Fatal("-datadir argument required")
 	}
-	if len(*tlsCertPtr) != 0 && len(*tlsKeyPtr) == 0 {
-		log.Fatal("-tlskey argument missing")
-	}
-	if len(*tlsCertPtr) == 0 && len(*tlsKeyPtr) != 0 {
-		log.Fatal("-tlscert argument missing")
+
+	// if accepting connections, and a TLS certificate is passed, validate
+	var tlsCertKeyPair tls.Certificate
+	if !*noAcceptPtr {
+		if len(*tlsCertPtr) != 0 {
+			if len(*tlsKeyPtr) == 0 {
+				log.Fatal("-tlskey argument missing")
+			}
+			var err error
+			tlsCertKeyPair, err = tls.LoadX509KeyPair(*tlsCertPtr, *tlsKeyPtr)
+			if err != nil {
+				log.Fatal(err)
+			}
+		} else if len(*tlsKeyPtr) != 0 {
+			log.Fatal("-tlscert argument missing")
+		}
 	}
 
 	if len(*peerPtr) != 0 {
@@ -205,9 +217,9 @@ func main() {
 	}
 
 	// manage peer connections
-	peerManager := NewPeerManager(genesisID, peerStore, blockStore, ledger, processor, txQueue,
-		*dataDirPtr, myExternalIP, *peerPtr, *tlsCertPtr, *tlsKeyPtr,
-		*portPtr, *inLimitPtr, !*noAcceptPtr, !*noIrcPtr, *dnsSeedPtr, banMap)
+	peerManager := NewPeerManager(genesisID, peerStore, blockStore, ledger, processor,
+		txQueue, *dataDirPtr, myExternalIP, *peerPtr, &tlsCertKeyPair, *portPtr, *inLimitPtr,
+		!*noAcceptPtr, !*noIrcPtr, *dnsSeedPtr, banMap)
 	peerManager.Run()
 
 	// shutdown on ctrl-c
