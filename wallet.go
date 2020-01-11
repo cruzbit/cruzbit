@@ -133,6 +133,29 @@ func (w *Wallet) NewKeys(count int) ([]ed25519.PublicKey, error) {
 	return pubKeys, nil
 }
 
+// AddKey adds an existing key pair to the database.
+func (w *Wallet) AddKey(pubKey ed25519.PublicKey, privKey ed25519.PrivateKey) error {
+	// encrypt the private key
+	encryptedPrivKey := encryptPrivateKey(privKey, w.passphrase)
+	decryptedPrivKey, ok := decryptPrivateKey(encryptedPrivKey, w.passphrase)
+
+	// safety check
+	if !ok || !bytes.Equal(decryptedPrivKey, privKey) {
+		return fmt.Errorf("Unable to encrypt/decrypt private key")
+	}
+
+	// store the key
+	privKeyDbKey, err := encodePrivateKeyDbKey(pubKey)
+	if err != nil {
+		return err
+	}
+	wo := opt.WriteOptions{Sync: true}
+	if err := w.db.Put(privKeyDbKey, encryptedPrivKey, &wo); err != nil {
+		return err
+	}
+	return nil
+}
+
 // GetKeys returns all of the public keys from the database.
 func (w *Wallet) GetKeys() ([]ed25519.PublicKey, error) {
 	privKeyDbKey, err := encodePrivateKeyDbKey(nil)
