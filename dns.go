@@ -117,11 +117,11 @@ func (d *DNSSeeder) Shutdown() {
 
 var Seeders = [...]string{
 	"66.172.27.47:8831",
-	"66.172.12.98:8831",
+	"66.172.12.98:8831", // public.cruzb.it:8831
 	"66.117.62.146:8831",
-	"dns.cruzbit.xyz:8831",
 	"dns.cruzb.it:8831",
-	"116.203.64.99:8831",
+	"one.cruzb.it:8831",
+	"two.cruzb.it:8831",
 }
 
 // Query DNS seeders
