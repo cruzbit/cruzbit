@@ -20,8 +20,8 @@ import (
 	"syscall"
 	"time"
 
+	. "cruzbit"
 	"github.com/c-bata/go-prompt"
-	. "github.com/cruzbit/cruzbit"
 	"github.com/logrusorgru/aurora"
 	"golang.org/x/crypto/ed25519"
 	"golang.org/x/crypto/ssh/terminal"
