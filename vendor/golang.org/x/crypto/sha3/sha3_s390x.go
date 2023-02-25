@@ -2,7 +2,8 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-//+build !gccgo,!appengine
+//go:build gc && !purego
+// +build gc,!purego
 
 package sha3
 
@@ -33,11 +34,13 @@ const (
 
 // kimd is a wrapper for the 'compute intermediate message digest' instruction.
 // src must be a multiple of the rate for the given function code.
+//
 //go:noescape
 func kimd(function code, chain *[200]byte, src []byte)
 
 // klmd is a wrapper for the 'compute last message digest' instruction.
 // src padding is handled by the instruction.
+//
 //go:noescape
 func klmd(function code, chain *[200]byte, dst, src []byte)
 
@@ -112,7 +115,7 @@ func (s *asmState) Write(b []byte) (int, error) {
 		if len(s.buf) == 0 && len(b) >= cap(s.buf) {
 			// Hash the data directly and push any remaining bytes
 			// into the buffer.
-			remainder := len(s.buf) % s.rate
+			remainder := len(b) % s.rate
 			kimd(s.function, &s.a, b[:len(b)-remainder])
 			if remainder != 0 {
 				s.copyIntoBuf(b[len(b)-remainder:])
