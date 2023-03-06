@@ -3,7 +3,7 @@ module github.com/cruzbit/cruzbit
 go 1.12
 
 require (
-	github.com/buger/jsonparser v0.0.0-20181115193947-bf1c66bbce23
+	github.com/buger/jsonparser v1.1.1
 	github.com/c-bata/go-prompt v0.2.3
 	github.com/dgryski/go-metro v0.0.0-20180109044635-280f6062b5bc // indirect
 	github.com/glendc/go-external-ip v0.0.0-20170425150139-139229dcdddd
