@@ -12,7 +12,7 @@ require (
 	github.com/mattn/go-colorable v0.1.2 // indirect
 	github.com/mattn/go-runewidth v0.0.4 // indirect
 	github.com/mattn/go-tty v0.0.0-20190424173100-523744f04859 // indirect
-	github.com/miekg/dns v1.1.14
+	github.com/miekg/dns v1.1.25
 	github.com/pierrec/lz4 v2.0.5+incompatible
 	github.com/pkg/term v0.0.0-20190109203006-aa71e9d9e942 // indirect
 	github.com/seiflotfy/cuckoofilter v0.0.0-20190302225222-764cb5258d9b
@@ -20,5 +20,5 @@ require (
 	github.com/thoj/go-ircevent v0.0.0-20190609082534-949efec00844
 	gitlab.com/NebulousLabs/fastrand v0.0.0-20181126182046-603482d69e40 // indirect
 	gitlab.com/NebulousLabs/go-upnp v0.0.0-20181011194642-3a71999ed0d3
-	golang.org/x/crypto v0.0.0-20190621222207-cc06ce4a13d4
+	golang.org/x/crypto v0.0.0-20190923035154-9ee001bba392
 )
